@@ -31,9 +31,9 @@ const getAllCoursesServices = async (query?: {
     publicOnly = false,
   } = query || {};
 
-  // Status filter — public API shows only published
+  // Status filter — public API shows only published (or courses without status field)
   if (publicOnly) {
-    filter.status = 'published';
+    filter.$or = [{ status: 'published' }, { status: { $exists: false } }];
   } else if (status && status !== 'all') {
     filter.status = status;
   }
