@@ -43,6 +43,8 @@ const corsOptions: CorsOptions = {
     'http://localhost:5005',
     'https://bdcallingacademy.com',
     'https://www.bdcallingacademy.com',
+    'https://megabdcallingacademy-client.vercel.app',
+    /\.vercel\.app$/,
   ],
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   credentials: true,
