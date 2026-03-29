@@ -6,7 +6,6 @@ import { IBatch } from './batch.interface';
  * Format: COURSE-XX (e.g., WEB-01, PYT-02)
  */
 async function generateBatchId(courseName: string): Promise<string> {
-    // Get short code from course name (first 3 letters of each word)
     const courseCode = courseName
         .split(' ')
         .map(word => word.substring(0, 3))
@@ -14,7 +13,6 @@ async function generateBatchId(courseName: string): Promise<string> {
         .toUpperCase()
         .slice(0, 6);
 
-    // Find highest existing batch number for this course
     const existingBatches = await Batch.find({
         id: { $regex: new RegExp(`^${courseCode}-`, 'i') },
         isDeleted: false,
@@ -37,7 +35,6 @@ async function generateBatchId(courseName: string): Promise<string> {
 const createBatch = async (payload: Partial<IBatch>): Promise<IBatch> => {
     const id = await generateBatchId(payload.courseName || 'BATCH');
 
-    // Determine status based on dates
     const now = new Date();
     const startDate = new Date(payload.startDate || now);
     const endDate = new Date(payload.endDate || now);
@@ -52,6 +49,7 @@ const createBatch = async (payload: Partial<IBatch>): Promise<IBatch> => {
     const batchData = {
         ...payload,
         id,
+        name: payload.name || `${payload.courseName} - Batch ${id.split('-').pop()}`,
         status,
         isDeleted: false,
     };
@@ -60,16 +58,27 @@ const createBatch = async (payload: Partial<IBatch>): Promise<IBatch> => {
     return newBatch;
 };
 
-// Get all batches
+// Get all batches (with courseId populated)
 const getAllBatches = async (): Promise<IBatch[]> => {
-    const batches = await Batch.find({ isDeleted: false }).sort({ createdAt: -1 });
+    const batches = await Batch.find({ isDeleted: false })
+        .populate('courseId', 'title image type')
+        .sort({ createdAt: -1 });
     return batches;
 };
 
 // Get single batch by ID
 const getBatchById = async (id: string): Promise<IBatch | null> => {
-    const batch = await Batch.findOne({ id, isDeleted: false });
+    const batch = await Batch.findOne({ id, isDeleted: false })
+        .populate('courseId', 'title image type');
     return batch;
+};
+
+// Get batches by course
+const getBatchesByCourse = async (courseId: string): Promise<IBatch[]> => {
+    const batches = await Batch.find({ courseId, isDeleted: false })
+        .populate('courseId', 'title image type')
+        .sort({ createdAt: -1 });
+    return batches;
 };
 
 // Update batch
@@ -78,7 +87,7 @@ const updateBatch = async (id: string, payload: Partial<IBatch>): Promise<IBatch
         { id, isDeleted: false },
         payload,
         { new: true }
-    );
+    ).populate('courseId', 'title image type');
     return batch;
 };
 
@@ -96,6 +105,7 @@ export const BatchService = {
     createBatch,
     getAllBatches,
     getBatchById,
+    getBatchesByCourse,
     updateBatch,
     deleteBatch,
 };

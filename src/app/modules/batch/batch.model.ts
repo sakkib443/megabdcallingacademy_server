@@ -8,9 +8,16 @@ const batchSchema = new Schema<IBatch>(
             required: true,
             unique: true,
         },
+        name: {
+            type: String,
+        },
         courseName: {
             type: String,
             required: true,
+        },
+        courseId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Course',
         },
         startDate: {
             type: Date,
@@ -19,6 +26,10 @@ const batchSchema = new Schema<IBatch>(
         endDate: {
             type: Date,
             required: true,
+        },
+        maxStudents: {
+            type: Number,
+            default: 50,
         },
         status: {
             type: String,

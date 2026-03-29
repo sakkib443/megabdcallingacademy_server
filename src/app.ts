@@ -88,6 +88,7 @@ app.use('/api/courses', CourseRoutes);
 app.use('/api/categories', CategoryRoutes);
 app.use('/api/certificate', CertificateRoutes);
 app.use('/api/batch', BatchRoutes);
+app.use('/api/batches', BatchRoutes);
 app.use('/api/blogs', BlogRoutes);
 app.use('/api/contacts', ContactRoutes);
 app.use('/api/settings', SettingsRoutes);

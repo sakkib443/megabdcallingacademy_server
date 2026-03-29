@@ -2,7 +2,6 @@
 import { Request, Response } from 'express';
 import { BatchService } from './batch.service';
 
-// Create new batch
 export const createBatchController = async (req: Request, res: Response) => {
     try {
         const result = await BatchService.createBatch(req.body);
@@ -16,7 +15,6 @@ export const createBatchController = async (req: Request, res: Response) => {
     }
 };
 
-// Get all batches
 export const getAllBatchesController = async (req: Request, res: Response) => {
     try {
         const batches = await BatchService.getAllBatches();
@@ -30,7 +28,6 @@ export const getAllBatchesController = async (req: Request, res: Response) => {
     }
 };
 
-// Get single batch
 export const getBatchByIdController = async (req: Request, res: Response) => {
     try {
         const batch = await BatchService.getBatchById(req.params.id);
@@ -47,7 +44,19 @@ export const getBatchByIdController = async (req: Request, res: Response) => {
     }
 };
 
-// Update batch
+export const getBatchesByCourseController = async (req: Request, res: Response) => {
+    try {
+        const batches = await BatchService.getBatchesByCourse(req.params.courseId);
+        res.status(200).json({
+            success: true,
+            message: 'Batches retrieved successfully',
+            data: batches,
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 export const updateBatchController = async (req: Request, res: Response) => {
     try {
         const batch = await BatchService.updateBatch(req.params.id, req.body);
@@ -64,7 +73,6 @@ export const updateBatchController = async (req: Request, res: Response) => {
     }
 };
 
-// Delete batch
 export const deleteBatchController = async (req: Request, res: Response) => {
     try {
         const batch = await BatchService.deleteBatch(req.params.id);
@@ -85,6 +93,7 @@ export const BatchController = {
     createBatchController,
     getAllBatchesController,
     getBatchByIdController,
+    getBatchesByCourseController,
     updateBatchController,
     deleteBatchController,
 };
