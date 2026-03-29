@@ -213,6 +213,65 @@ const getStats = async () => {
   };
 };
 
+// ─── Approve Enrollment (Admin) ─────────────────────────────
+const approveEnrollment = async (enrollmentId: string) => {
+  const enrollment = await Enrollment.findById(enrollmentId);
+  if (!enrollment) throw new Error('Enrollment not found');
+  if (enrollment.status === 'active') throw new Error('Already active');
+
+  enrollment.status = 'active';
+  enrollment.payment.status = 'paid';
+  enrollment.payment.paidAt = new Date();
+
+  // Auto-assign batch if not already assigned
+  if (!enrollment.batchId) {
+    try {
+      const { Batch } = await import('../batch/batch.model');
+      const course = await Course.findById(enrollment.courseId);
+      if (course) {
+        const availableBatch = await Batch.findOne({
+          courseName: course.title,
+          status: { $in: ['active', 'upcoming'] },
+          isDeleted: false,
+        }).sort({ startDate: 1 });
+        if (availableBatch) {
+          enrollment.batchId = availableBatch._id;
+        }
+      }
+    } catch (e) {
+      console.error('Batch auto-assign failed:', e);
+    }
+  }
+
+  await enrollment.save();
+
+  await Course.findByIdAndUpdate(enrollment.courseId, {
+    $inc: { totalStudentsEnroll: 1 },
+  });
+
+  return enrollment;
+};
+
+// ─── Get Student Payment History ────────────────────────────
+const getStudentPayments = async (studentId: string) => {
+  const enrollments = await Enrollment.find({ studentId, isDeleted: false })
+    .populate('courseId', 'title image slug fee type')
+    .sort({ createdAt: -1 });
+
+  // Also fetch installments
+  let installments: any[] = [];
+  try {
+    const { Installment } = await import('../installment/installment.model');
+    installments = await Installment.find({ studentId, isDeleted: false })
+      .populate('courseId', 'title')
+      .sort({ dueDate: 1 });
+  } catch (e) {
+    console.error('Installment fetch failed:', e);
+  }
+
+  return { enrollments, installments };
+};
+
 
 export const EnrollmentService = {
   createEnrollment,
@@ -224,4 +283,6 @@ export const EnrollmentService = {
   cancelEnrollment,
   adminEnroll,
   getStats,
+  approveEnrollment,
+  getStudentPayments,
 };

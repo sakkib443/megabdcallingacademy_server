@@ -61,6 +61,20 @@ router.patch(
   EnrollmentController.cancelEnrollment
 );
 
+router.patch(
+  '/approve/:id',
+  authMiddleware,
+  authorize('admin', 'trainingManager'),
+  EnrollmentController.approveEnrollment
+);
+
+router.get(
+  '/my-payments',
+  authMiddleware,
+  authorize('student'),
+  EnrollmentController.getMyPayments
+);
+
 router.get(
   '/stats',
   authMiddleware,

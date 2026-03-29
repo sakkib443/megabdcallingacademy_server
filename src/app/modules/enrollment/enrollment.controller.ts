@@ -182,6 +182,43 @@ const getStats = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Admin: Approve enrollment ─────────────────────────────
+const approveEnrollment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await EnrollmentService.approveEnrollment(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Enrollment approved & activated',
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to approve enrollment',
+    });
+  }
+};
+
+// ─── Student: Payment history ──────────────────────────────
+const getMyPayments = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const result = await EnrollmentService.getStudentPayments(user._id);
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch payments',
+    });
+  }
+};
+
 export const EnrollmentController = {
   createEnrollment,
   verifyPayment,
@@ -192,4 +229,6 @@ export const EnrollmentController = {
   cancelEnrollment,
   adminEnroll,
   getStats,
+  approveEnrollment,
+  getMyPayments,
 };
