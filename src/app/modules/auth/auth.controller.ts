@@ -3,6 +3,29 @@
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 
+// ─── Get current user (token verify) ────────────────────────
+export const getMeController = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    }
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        name: user.name,
+      },
+    });
+  } catch (error: any) {
+    res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+};
+
 
 export const loginController = async (req: Request, res: Response) => {
   try {
