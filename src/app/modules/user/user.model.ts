@@ -7,9 +7,9 @@ const userSchema = new Schema<IUser>(
     id: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
     firstName: { type: String, required: true },
-    lastName: { type: String, required: true },
-    phoneNumber: { type: String, required: true },
-    password: { type: String, required: true },
+    lastName: { type: String, default: '' },
+    phoneNumber: { type: String, default: '' },
+    password: { type: String, required: false, default: '' },
     isPasswordChanged: { type: Boolean, default: false },
     role: {
       type: String,
@@ -19,18 +19,20 @@ const userSchema = new Schema<IUser>(
     status: {
       type: String,
       enum: ['active', 'blocked', 'pending'],
-      default: 'pending',
+      default: 'active',
     },
     isDeleted: { type: Boolean, default: false },
+    image: { type: String, default: '' },
+    googleId: { type: String, default: '' },
+    authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
   },
   {
     timestamps: true,
   }
 );
 
-// 👇👇👇 Just this block added 👇👇👇
 userSchema.pre('save', async function (next) {
-  if (this.isModified('password')) {
+  if (this.isModified('password') && this.password) {
     this.password = await bcrypt.hash(this.password, 10);
   }
   next();

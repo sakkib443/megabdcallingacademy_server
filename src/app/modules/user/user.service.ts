@@ -46,25 +46,63 @@ interface CreateUserResponse {
 const createUserServices = async (payload: IUser): Promise<CreateUserResponse> => {
   // Do not accept externally provided id — generate it here
   const id = await generateUserId();
-  const toCreate = { ...payload, id } as IUser;
+  const toCreate = { ...payload, id, authProvider: 'local' as const } as IUser;
 
   const newUser = await User.create(toCreate);
 
-  // Generate JWT token for automatic login after registration
   const token = jwt.sign(
-    {
-      _id: newUser._id,
-      role: newUser.role,
-      email: newUser.email,
-    },
-    process.env.JWT_SECRET || 'default_secret',
+    { _id: newUser._id, role: newUser.role, email: newUser.email },
+    process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'default_secret',
     { expiresIn: '7d' }
   );
 
-  return {
-    user: newUser,
-    token
-  };
+  return { user: newUser, token };
+};
+
+// Google Login/Register
+const googleLoginServices = async (payload: {
+  firstName: string;
+  lastName?: string;
+  email: string;
+  image?: string;
+  googleId: string;
+}): Promise<CreateUserResponse> => {
+  // Check if user already exists
+  let user = await User.findOne({ email: payload.email, isDeleted: false });
+
+  if (user) {
+    // Update google info if needed
+    if (!user.googleId) {
+      user.googleId = payload.googleId;
+      user.authProvider = 'google';
+      if (payload.image) user.image = payload.image;
+      await user.save();
+    }
+  } else {
+    // Create new user
+    const id = await generateUserId();
+    user = await User.create({
+      id,
+      email: payload.email,
+      firstName: payload.firstName,
+      lastName: payload.lastName || '',
+      phoneNumber: '',
+      password: '',
+      role: 'student',
+      status: 'active',
+      image: payload.image || '',
+      googleId: payload.googleId,
+      authProvider: 'google',
+    });
+  }
+
+  const token = jwt.sign(
+    { _id: user._id, role: user.role, email: user.email },
+    process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'default_secret',
+    { expiresIn: '7d' }
+  );
+
+  return { user, token };
 };
 
 const getAllUsersServices = async (): Promise<IUser[]> => {
@@ -118,6 +156,7 @@ const deleteUserServices = async (id: string): Promise<IUser | null> => {
 
 export const UserService = {
   createUserServices,
+  googleLoginServices,
   getAllUsersServices,
   getSingleUserServices,
   updateUserServices,

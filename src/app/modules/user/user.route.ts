@@ -1,15 +1,14 @@
 import express from 'express';
 import { UserController } from './user.controller';
 import validateRequest from '../../middlewares/validateRequest';
-import { userValidationSchema } from './user.validation';
+import { signupValidationSchema, googleLoginValidationSchema } from './user.validation';
 import { authMiddleware } from '../../middlewares/auth';
 import { fixDuplicateUserIds } from './user.migration';
 
-
-
 const router = express.Router();
 
-router.post('/signup', validateRequest(userValidationSchema), UserController.createUserController);
+router.post('/signup', validateRequest(signupValidationSchema), UserController.createUserController);
+router.post('/google-login', validateRequest(googleLoginValidationSchema), UserController.googleLoginController);
 router.get('/', UserController.getAllUsersController);
 
 // Migration endpoint to fix duplicate user IDs (run once) - MUST be before /:id routes

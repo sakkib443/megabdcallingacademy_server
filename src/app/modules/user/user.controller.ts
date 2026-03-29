@@ -17,6 +17,20 @@ export const createUserController = async (req: Request, res: Response) => {
   }
 };
 
+export const googleLoginController = async (req: Request, res: Response) => {
+  try {
+    const result = await UserService.googleLoginServices(req.body);
+    res.status(200).json({
+      success: true,
+      message: 'Google login successful!',
+      data: result.user,
+      token: result.token,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const getAllUsersController = async (req: Request, res: Response) => {
   try {
     const users = await UserService.getAllUsersServices();
@@ -67,6 +81,7 @@ export const deleteUserController = async (req: Request, res: Response) => {
 
 export const UserController = {
   createUserController,
+  googleLoginController,
   deleteUserController,
   updateUserController,
   getAllUsersController,
