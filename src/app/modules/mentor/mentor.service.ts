@@ -12,25 +12,37 @@ const getAllMentorsServices = async () => {
   return await Mentor.find().sort({ _id: 1 });
 };
 
-// READ SINGLE (এখানে পরিবর্তন করা হয়েছে)
+// READ SINGLE - supports both MongoDB _id and custom id
 const getSingleMentorServices = async (id: string): Promise<TMentor | null> => {
-  // id এর বদলে findById(id) ব্যবহার করুন যা MongoDB _id দিয়ে খুঁজবে
-  return await Mentor.findById(id);
+  const mongoose = await import('mongoose');
+  if (mongoose.default.Types.ObjectId.isValid(id) && id.length === 24) {
+    const result = await Mentor.findById(id);
+    if (result) return result;
+  }
+  return await Mentor.findOne({ id });
 };
 
-// UPDATE (এখানে পরিবর্তন করা হয়েছে)
+// UPDATE - supports both _id and custom id
 const updateMentorServices = async (
   id: string,
   payload: Partial<TMentor>
 ): Promise<TMentor | null> => {
-  // findOneAndUpdate({id}) এর বদলে findByIdAndUpdate(id)
-  return await Mentor.findByIdAndUpdate(id, payload, { new: true });
+  const mongoose = await import('mongoose');
+  if (mongoose.default.Types.ObjectId.isValid(id) && id.length === 24) {
+    const result = await Mentor.findByIdAndUpdate(id, payload, { new: true });
+    if (result) return result;
+  }
+  return await Mentor.findOneAndUpdate({ id }, payload, { new: true });
 };
 
-// DELETE (এখানে পরিবর্তন করা হয়েছে)
+// DELETE - supports both _id and custom id
 const deleteMentorServices = async (id: string): Promise<TMentor | null> => {
-  // findOneAndDelete({id}) এর বদলে findByIdAndDelete(id)
-  return await Mentor.findByIdAndDelete(id);
+  const mongoose = await import('mongoose');
+  if (mongoose.default.Types.ObjectId.isValid(id) && id.length === 24) {
+    const result = await Mentor.findByIdAndDelete(id);
+    if (result) return result;
+  }
+  return await Mentor.findOneAndDelete({ id });
 };
 
 export const MentorService = {
