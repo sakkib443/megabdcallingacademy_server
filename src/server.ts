@@ -2,14 +2,36 @@ import mongoose from 'mongoose';
 import app from './app';
 import config from './app/config';
 
-let isConnected = false;
+// ─── Vercel Serverless: Cache connection across warm invocations ───
+let cached = (global as any).mongoose;
+if (!cached) {
+  cached = (global as any).mongoose = { conn: null, promise: null };
+}
 
 async function connectDB() {
-  if (isConnected) return;
+  if (cached.conn) return cached.conn;
 
-  await mongoose.connect(config.database_url as string);
-  isConnected = true;
-  console.log('🗄️  Database connected successfully');
+  if (!cached.promise) {
+    const opts = {
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+    };
+    cached.promise = mongoose
+      .connect(config.database_url as string, opts)
+      .then((m) => {
+        console.log('🗄️  Database connected successfully');
+        return m;
+      });
+  }
+
+  try {
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
+  }
+  return cached.conn;
 }
 
 // For local development
