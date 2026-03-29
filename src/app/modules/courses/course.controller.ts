@@ -13,11 +13,21 @@ export const createCourseController = async (req: Request, res: Response) => {
   }
 };
 
-// GET All Courses
+// GET All Courses (supports ?search=&category=&type=&sort=&page=&limit=&status=)
 export const getAllCoursesController = async (req: Request, res: Response) => {
   try {
-    const courses = await CourseService.getAllCoursesServices();
-    res.status(200).json({ success: true, data: courses });
+    const { search, category, type, sort, page, limit, status } = req.query;
+    const result = await CourseService.getAllCoursesServices({
+      search: search as string,
+      category: category as string,
+      type: type as string,
+      status: status as string,
+      sort: sort as string,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50,
+      publicOnly: !status, // Public API shows only published unless admin specifies status
+    });
+    res.status(200).json({ success: true, data: result.courses, meta: { total: result.total, page: result.page, totalPages: result.totalPages } });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

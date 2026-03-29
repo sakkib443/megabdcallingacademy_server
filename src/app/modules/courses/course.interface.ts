@@ -9,6 +9,7 @@ export interface ICourse {
   category: Types.ObjectId;
 
   type: string;
+  status: 'draft' | 'published' | 'archived';
   image: string;
   fee: string;
   offerPrice?: string;

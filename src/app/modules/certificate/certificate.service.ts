@@ -1,122 +1,131 @@
 import { Certificate } from './certificate.model';
 import { ICertificate } from './certificate.interface';
 
-/**
- * Generate a unique certificate ID in format: BAC-CERT-XXXX
- */
+/** Generate unique certificate ID: BAC-CERT-XXXX */
 async function generateCertificateId(): Promise<string> {
     const prefix = 'BAC-CERT-';
-
-    // Find the highest existing certificate number
-    const lastCertificate = await Certificate.findOne({
-        id: { $regex: /^BAC-CERT-\d+$/ }
-    }).sort({ id: -1 }).lean();
-
-    let nextNumber = 1;
-
-    if (lastCertificate && lastCertificate.id) {
-        const match = lastCertificate.id.match(/BAC-CERT-(\d+)/);
-        if (match) {
-            nextNumber = parseInt(match[1], 10) + 1;
-        }
+    const lastCert = await Certificate.findOne({ id: { $regex: /^BAC-CERT-\d+$/ } }).sort({ id: -1 }).lean();
+    let nextNum = 1;
+    if (lastCert?.id) {
+        const match = lastCert.id.match(/BAC-CERT-(\d+)/);
+        if (match) nextNum = parseInt(match[1], 10) + 1;
     }
-
-    // Also check total count to ensure uniqueness
     const totalCount = await Certificate.countDocuments({});
-    if (totalCount >= nextNumber) {
-        nextNumber = totalCount + 1;
-    }
-
-    return `${prefix}${String(nextNumber).padStart(4, '0')}`;
+    if (totalCount >= nextNum) nextNum = totalCount + 1;
+    return `${prefix}${String(nextNum).padStart(4, '0')}`;
 }
 
-// Create a new certificate
+/** Generate QR code data (simple verification URL) */
+function generateQRData(certId: string): { qrCode: string; verificationUrl: string } {
+    const verificationUrl = `http://localhost:3000/verify-certificate?id=${certId}`;
+    // Simple QR data — frontend will render using a QR library
+    return { qrCode: verificationUrl, verificationUrl };
+}
+
+// ─── Create Certificate (manual or auto) ────────────────────
 const createCertificate = async (payload: Partial<ICertificate>): Promise<ICertificate> => {
     const id = await generateCertificateId();
+    const qr = generateQRData(id);
     const certificateData = {
         ...payload,
         id,
         issueDate: new Date(),
-        status: 'active' as const,
+        status: 'pending' as const,
+        qrCode: qr.qrCode,
+        verificationUrl: qr.verificationUrl,
         isDeleted: false,
     };
-
-    const newCertificate = await Certificate.create(certificateData);
-    return newCertificate;
+    return Certificate.create(certificateData);
 };
 
-// Get all certificates (for admin)
-const getAllCertificates = async (): Promise<ICertificate[]> => {
-    const certificates = await Certificate.find({ isDeleted: false }).sort({ createdAt: -1 });
-    return certificates;
+// ─── Auto-Generate (when course progress = 100%) ────────────
+const autoGenerate = async (studentId: string, studentName: string, courseName: string, batchId: string, batchNumber: string, startDate: Date, endDate: Date) => {
+    // Check if already exists
+    const existing = await Certificate.findOne({ studentId, courseName, isDeleted: false });
+    if (existing) return existing;
+
+    return createCertificate({ studentId, studentName, courseName, batchId, batchNumber, startDate, endDate });
 };
 
-// Search certificates by studentId, studentName, or courseName
-const searchCertificates = async (query: {
-    studentId?: string;
-    studentName?: string;
-    courseName?: string;
-    phoneNumber?: string;
-    email?: string;
-}): Promise<ICertificate[]> => {
-    const { studentId, studentName, courseName } = query;
-
-    const searchConditions: any[] = [];
-
-    if (studentId) {
-        searchConditions.push({ studentId: { $regex: studentId, $options: 'i' } });
-    }
-    if (studentName) {
-        searchConditions.push({ studentName: { $regex: studentName, $options: 'i' } });
-    }
-    if (courseName) {
-        searchConditions.push({ courseName: { $regex: courseName, $options: 'i' } });
-    }
-
-    if (searchConditions.length === 0) {
-        return [];
-    }
-
-    const certificates = await Certificate.find({
-        $or: searchConditions,
-        isDeleted: false,
-        status: 'active',
-    });
-
-    return certificates;
+// ─── Get All (Admin) ────────────────────────────────────────
+const getAllCertificates = async (statusFilter?: string) => {
+    const filter: any = { isDeleted: false };
+    if (statusFilter && statusFilter !== 'all') filter.status = statusFilter;
+    return Certificate.find(filter).sort({ createdAt: -1 });
 };
 
-// Get single certificate by ID
-const getCertificateById = async (id: string): Promise<ICertificate | null> => {
-    const certificate = await Certificate.findOne({ id, isDeleted: false });
-    return certificate;
+// ─── Get Pending (Admin workflow) ───────────────────────────
+const getPending = async () => {
+    return Certificate.find({ status: 'pending', isDeleted: false }).sort({ createdAt: -1 });
 };
 
-// Delete certificate (soft delete)
-const deleteCertificate = async (id: string): Promise<ICertificate | null> => {
-    const certificate = await Certificate.findOneAndUpdate(
-        { id, isDeleted: false },
-        { isDeleted: true },
+// ─── Activate Certificate (Admin) ───────────────────────────
+const activate = async (certId: string, adminId: string) => {
+    return Certificate.findOneAndUpdate(
+        { id: certId, isDeleted: false },
+        { status: 'active', activatedBy: adminId, activatedAt: new Date() },
         { new: true }
     );
-    return certificate;
 };
 
-// Update certificate
-const updateCertificate = async (id: string, payload: Partial<ICertificate>): Promise<ICertificate | null> => {
-    const certificate = await Certificate.findOneAndUpdate(
-        { id, isDeleted: false },
-        payload,
+// ─── Revoke Certificate ─────────────────────────────────────
+const revoke = async (certId: string) => {
+    return Certificate.findOneAndUpdate(
+        { id: certId, isDeleted: false },
+        { status: 'revoked' },
         { new: true }
     );
-    return certificate;
 };
+
+// ─── Search ─────────────────────────────────────────────────
+const searchCertificates = async (query: { studentId?: string; studentName?: string; courseName?: string }) => {
+    const conditions: any[] = [];
+    if (query.studentId) conditions.push({ studentId: { $regex: query.studentId, $options: 'i' } });
+    if (query.studentName) conditions.push({ studentName: { $regex: query.studentName, $options: 'i' } });
+    if (query.courseName) conditions.push({ courseName: { $regex: query.courseName, $options: 'i' } });
+    if (conditions.length === 0) return [];
+    return Certificate.find({ $or: conditions, isDeleted: false, status: 'active' });
+};
+
+// ─── Get by ID (public verify) ──────────────────────────────
+const getCertificateById = async (id: string) => {
+    return Certificate.findOne({ id, isDeleted: false });
+};
+
+// ─── Verify (public) ────────────────────────────────────────
+const verify = async (certId: string) => {
+    const cert = await Certificate.findOne({ id: certId, isDeleted: false });
+    if (!cert) return { valid: false, message: 'Certificate not found' };
+    if (cert.status === 'revoked') return { valid: false, message: 'Certificate has been revoked', certificate: cert };
+    if (cert.status === 'pending') return { valid: false, message: 'Certificate is pending activation', certificate: cert };
+    return { valid: true, message: 'Certificate is valid', certificate: cert };
+};
+
+// ─── Student's Certificates ─────────────────────────────────
+const getStudentCertificates = async (studentId: string) => {
+    return Certificate.find({ studentId, isDeleted: false }).sort({ createdAt: -1 });
+};
+
+// ─── Stats ──────────────────────────────────────────────────
+const getStats = async () => {
+    const [total, pending, active, revoked] = await Promise.all([
+        Certificate.countDocuments({ isDeleted: false }),
+        Certificate.countDocuments({ status: 'pending', isDeleted: false }),
+        Certificate.countDocuments({ status: 'active', isDeleted: false }),
+        Certificate.countDocuments({ status: 'revoked', isDeleted: false }),
+    ]);
+    return { total, pending, active, revoked };
+};
+
+// ─── Delete / Update ────────────────────────────────────────
+const deleteCertificate = async (id: string) => Certificate.findOneAndUpdate({ id, isDeleted: false }, { isDeleted: true }, { new: true });
+const updateCertificate = async (id: string, payload: Partial<ICertificate>) => Certificate.findOneAndUpdate({ id, isDeleted: false }, payload, { new: true });
 
 export const CertificateService = {
-    createCertificate,
-    getAllCertificates,
-    searchCertificates,
-    getCertificateById,
-    deleteCertificate,
-    updateCertificate,
+    createCertificate, autoGenerate,
+    getAllCertificates, getPending,
+    activate, revoke,
+    searchCertificates, getCertificateById, verify,
+    getStudentCertificates, getStats,
+    deleteCertificate, updateCertificate,
 };

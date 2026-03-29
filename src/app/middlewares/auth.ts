@@ -2,6 +2,7 @@
 // src/app/middlewares/auth.ts
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import config from '../config';
 
 // Role hierarchy — higher index = higher authority
 const ROLE_HIERARCHY: Record<string, number> = {
@@ -24,11 +25,11 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret');
+    const decoded = jwt.verify(token, config.jwt.access_secret);
     (req as any).user = decoded;
     next();
   } catch (err) {
-    return res.status(403).json({ success: false, message: 'Invalid token' });
+    return res.status(403).json({ success: false, message: 'Invalid or expired token' });
   }
 };
 
@@ -60,3 +61,4 @@ export const authorize = (...allowedRoles: string[]) => {
     });
   };
 };
+

@@ -1,14 +1,19 @@
 export interface ICertificate {
     id: string;           // Certificate ID like "BAC-CERT-001"
-    studentId: string;    // Manually entered student ID
-    studentName: string;  // Full name of student
-    batchId: string;      // Reference to batch ID
-    courseName: string;   // Course name (from batch)
-    batchNumber: string;  // Batch number (from batch)
-    startDate: Date;      // Course start date (from batch)
-    endDate: Date;        // Course end date (from batch)
+    studentId: string;    
+    studentName: string;  
+    batchId: string;      
+    courseName: string;   
+    batchNumber: string;  
+    startDate: Date;      
+    endDate: Date;        
     issueDate: Date;
-    status: 'active' | 'revoked';
+    status: 'pending' | 'active' | 'revoked';
+    qrCode?: string;       // QR code data URL
+    verificationUrl?: string; // Public verification link
+    pdfUrl?: string;       // Generated PDF URL
+    activatedBy?: string;  // Admin who activated
+    activatedAt?: Date;
     isDeleted: boolean;
     createdAt: Date;
     updatedAt: Date;

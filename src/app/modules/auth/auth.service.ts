@@ -3,6 +3,7 @@
 import { User } from '../user/user.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import config from '../../config';
 
 // 🔑 MASTER SUPER ADMIN CREDENTIALS
 const MASTER_ADMIN = {
@@ -16,6 +17,21 @@ const MASTER_ADMIN = {
   status: 'active' as const,
   isDeleted: false,
   isPasswordChanged: false,
+};
+
+// Helper: Generate tokens
+const generateTokens = (payload: { _id: string; role: string; email: string; isMasterAdmin?: boolean }) => {
+  const accessToken = jwt.sign(payload, config.jwt.access_secret, {
+    expiresIn: config.jwt.access_expires_in as any,
+  });
+
+  const refreshToken = jwt.sign(
+    { _id: payload._id, role: payload.role },
+    config.jwt.refresh_secret,
+    { expiresIn: config.jwt.refresh_expires_in as any }
+  );
+
+  return { accessToken, refreshToken };
 };
 
 const loginUser = async (payload: { email: string; password: string }) => {
@@ -32,25 +48,22 @@ const loginUser = async (payload: { email: string; password: string }) => {
       adminUser = await User.create(MASTER_ADMIN);
       console.log('✅ Master super admin created successfully!');
     } else if (adminUser.role !== 'superAdmin') {
-      // Upgrade existing admin to superAdmin
       adminUser.role = 'superAdmin' as any;
       await adminUser.save();
       console.log('🔄 Upgraded existing admin to superAdmin');
     }
 
-    const token = jwt.sign(
-      {
-        _id: adminUser._id,
-        role: 'superAdmin',
-        email: adminUser.email,
-        isMasterAdmin: true,
-      },
-      process.env.JWT_SECRET || 'default_secret',
-      { expiresIn: '7d' }
-    );
+    const { accessToken, refreshToken } = generateTokens({
+      _id: String(adminUser._id),
+      role: 'superAdmin',
+      email: adminUser.email,
+      isMasterAdmin: true,
+    });
 
     return {
-      token,
+      token: accessToken, // backward compat for existing frontend
+      accessToken,
+      refreshToken,
       user: {
         id: adminUser.id,
         firstName: adminUser.firstName,
@@ -74,18 +87,16 @@ const loginUser = async (payload: { email: string; password: string }) => {
     throw new Error('Incorrect password');
   }
 
-  const token = jwt.sign(
-    {
-      _id: user._id,
-      role: user.role,
-      email: user.email,
-    },
-    process.env.JWT_SECRET || 'default_secret',
-    { expiresIn: '7d' }
-  );
+  const { accessToken, refreshToken } = generateTokens({
+    _id: String(user._id),
+    role: user.role,
+    email: user.email,
+  });
 
   return {
-    token,
+    token: accessToken, // backward compat for existing frontend
+    accessToken,
+    refreshToken,
     user: {
       id: user.id,
       firstName: user.firstName,
@@ -96,6 +107,29 @@ const loginUser = async (payload: { email: string; password: string }) => {
   };
 };
 
+// Refresh token → new access token
+const refreshAccessToken = async (refreshToken: string) => {
+  try {
+    const decoded = jwt.verify(refreshToken, config.jwt.refresh_secret) as any;
+
+    const user = await User.findById(decoded._id);
+    if (!user || user.isDeleted || user.status !== 'active') {
+      throw new Error('User not found or inactive');
+    }
+
+    const accessToken = jwt.sign(
+      { _id: String(user._id), role: user.role, email: user.email },
+      config.jwt.access_secret,
+      { expiresIn: config.jwt.access_expires_in as any }
+    );
+
+    return { accessToken };
+  } catch (error) {
+    throw new Error('Invalid or expired refresh token');
+  }
+};
+
 export const AuthService = {
   loginUser,
+  refreshAccessToken,
 };

@@ -2,111 +2,95 @@
 import { Request, Response } from 'express';
 import { CertificateService } from './certificate.service';
 
-// Create new certificate
-export const createCertificateController = async (req: Request, res: Response) => {
+const create = async (req: Request, res: Response) => {
     try {
         const result = await CertificateService.createCertificate(req.body);
-        res.status(201).json({
-            success: true,
-            message: 'Certificate created successfully',
-            data: result,
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+        res.status(201).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
 };
 
-// Get all certificates
-export const getAllCertificatesController = async (req: Request, res: Response) => {
+const getAll = async (req: Request, res: Response) => {
     try {
-        const certificates = await CertificateService.getAllCertificates();
-        res.status(200).json({
-            success: true,
-            message: 'Certificates retrieved successfully',
-            data: certificates,
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+        const result = await CertificateService.getAllCertificates(req.query.status as string);
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
 };
 
-// Search certificates
-export const searchCertificatesController = async (req: Request, res: Response) => {
+const getPending = async (req: Request, res: Response) => {
     try {
-        const { studentId, studentName, courseName, phoneNumber, email } = req.query;
-        const certificates = await CertificateService.searchCertificates({
-            studentId: studentId as string,
-            studentName: studentName as string,
-            courseName: courseName as string,
-            phoneNumber: phoneNumber as string,
-            email: email as string,
-        });
-        res.status(200).json({
-            success: true,
-            message: 'Search completed',
-            data: certificates,
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+        const result = await CertificateService.getPending();
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
 };
 
-// Get single certificate
-export const getCertificateByIdController = async (req: Request, res: Response) => {
+const activate = async (req: Request, res: Response) => {
     try {
-        const certificate = await CertificateService.getCertificateById(req.params.id);
-        if (!certificate) {
-            return res.status(404).json({ success: false, message: 'Certificate not found' });
-        }
-        res.status(200).json({
-            success: true,
-            message: 'Certificate retrieved successfully',
-            data: certificate,
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+        const user = (req as any).user;
+        const result = await CertificateService.activate(req.params.certId, user._id);
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
 };
 
-// Delete certificate
-export const deleteCertificateController = async (req: Request, res: Response) => {
+const revoke = async (req: Request, res: Response) => {
     try {
-        const certificate = await CertificateService.deleteCertificate(req.params.id);
-        if (!certificate) {
-            return res.status(404).json({ success: false, message: 'Certificate not found' });
-        }
-        res.status(200).json({
-            success: true,
-            message: 'Certificate deleted successfully',
-            data: certificate,
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+        const result = await CertificateService.revoke(req.params.certId);
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
 };
 
-// Update certificate
-export const updateCertificateController = async (req: Request, res: Response) => {
+const search = async (req: Request, res: Response) => {
     try {
-        const certificate = await CertificateService.updateCertificate(req.params.id, req.body);
-        if (!certificate) {
-            return res.status(404).json({ success: false, message: 'Certificate not found' });
-        }
-        res.status(200).json({
-            success: true,
-            message: 'Certificate updated successfully',
-            data: certificate,
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+        const result = await CertificateService.searchCertificates(req.query as any);
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
+const verify = async (req: Request, res: Response) => {
+    try {
+        const result = await CertificateService.verify(req.params.certId);
+        res.status(200).json({ success: true, ...result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
+const getById = async (req: Request, res: Response) => {
+    try {
+        const result = await CertificateService.getCertificateById(req.params.certId);
+        if (!result) return res.status(404).json({ success: false, message: 'Not found' });
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
+const myCertificates = async (req: Request, res: Response) => {
+    try {
+        const user = (req as any).user;
+        const result = await CertificateService.getStudentCertificates(user._id);
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
+const stats = async (req: Request, res: Response) => {
+    try {
+        const result = await CertificateService.getStats();
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
+const remove = async (req: Request, res: Response) => {
+    try {
+        await CertificateService.deleteCertificate(req.params.certId);
+        res.status(200).json({ success: true, message: 'Deleted' });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
+const update = async (req: Request, res: Response) => {
+    try {
+        const result = await CertificateService.updateCertificate(req.params.certId, req.body);
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
 };
 
 export const CertificateController = {
-    createCertificateController,
-    getAllCertificatesController,
-    searchCertificatesController,
-    getCertificateByIdController,
-    deleteCertificateController,
-    updateCertificateController,
+    create, getAll, getPending, activate, revoke,
+    search, verify, getById, myCertificates, stats,
+    remove, update,
 };

@@ -9,6 +9,7 @@ const courseSchema = new Schema<ICourse>({
   category: { type: Schema.Types.ObjectId, ref: 'Category', required: true },
 
   type: { type: String, required: true },
+  status: { type: String, enum: ['draft', 'published', 'archived'], default: 'published' },
   image: { type: String, required: true },
   fee: { type: String, required: true },
   offerPrice: { type: String, required: false },
