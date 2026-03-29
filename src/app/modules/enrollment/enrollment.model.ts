@@ -35,6 +35,11 @@ const enrollmentSchema = new Schema<IEnrollment>(
     expiresAt: { type: Date },
     payment: { type: paymentSchema, required: true },
     completionPercent: { type: Number, default: 0, min: 0, max: 100 },
+    studentStatus: {
+      type: String,
+      enum: ['active', 'completed', 'dropout', 'inactive'],
+      default: 'active',
+    },
     completedAt: { type: Date },
     isDeleted: { type: Boolean, default: false },
   },

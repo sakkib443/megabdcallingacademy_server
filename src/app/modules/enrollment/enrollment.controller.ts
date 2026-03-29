@@ -219,6 +219,41 @@ const getMyPayments = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Admin: Update enrollment (generic) ────────────────────
+const updateEnrollment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const allowedFields = ['batchId', 'studentStatus', 'status', 'completionPercent', 'expiresAt'];
+    const updateData: Record<string, any> = {};
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    }
+
+    const { Enrollment } = require('./enrollment.model');
+    const result = await Enrollment.findByIdAndUpdate(id, updateData, { new: true })
+      .populate('studentId', 'firstName lastName name email phone')
+      .populate('courseId', 'title image type')
+      .populate('batchId', 'id name courseName');
+
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Enrollment not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Enrollment updated successfully',
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update enrollment',
+    });
+  }
+};
+
 export const EnrollmentController = {
   createEnrollment,
   verifyPayment,
@@ -231,4 +266,5 @@ export const EnrollmentController = {
   getStats,
   approveEnrollment,
   getMyPayments,
+  updateEnrollment,
 };

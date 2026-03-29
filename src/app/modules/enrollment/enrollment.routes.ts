@@ -82,4 +82,12 @@ router.get(
   EnrollmentController.getStats
 );
 
+// ── Generic update (batchId, studentStatus, etc.) ───────────
+router.patch(
+  '/:id',
+  authMiddleware,
+  authorize('admin', 'trainingManager'),
+  EnrollmentController.updateEnrollment
+);
+
 export const EnrollmentRoutes = router;
