@@ -225,14 +225,25 @@ const updateEnrollment = async (req: Request, res: Response) => {
     const { id } = req.params;
     const allowedFields = ['batchId', 'studentStatus', 'status', 'completionPercent', 'expiresAt'];
     const updateData: Record<string, any> = {};
+    const unsetData: Record<string, any> = {};
+
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
-        updateData[field] = req.body[field];
+        // Handle empty batchId — unset instead of setting empty string
+        if (field === 'batchId' && (!req.body[field] || req.body[field] === '')) {
+          unsetData[field] = 1;
+        } else {
+          updateData[field] = req.body[field];
+        }
       }
     }
 
+    const updateQuery: any = {};
+    if (Object.keys(updateData).length > 0) updateQuery.$set = updateData;
+    if (Object.keys(unsetData).length > 0) updateQuery.$unset = unsetData;
+
     const { Enrollment } = require('./enrollment.model');
-    const result = await Enrollment.findByIdAndUpdate(id, updateData, { new: true })
+    const result = await Enrollment.findByIdAndUpdate(id, updateQuery, { new: true })
       .populate('studentId', 'firstName lastName name email phone')
       .populate('courseId', 'title image type')
       .populate('batchId', 'id name courseName');
