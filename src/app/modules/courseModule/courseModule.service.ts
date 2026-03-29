@@ -39,11 +39,11 @@ const deleteModule = async (id: string) => {
 const reorderModules = async (courseId: string, moduleOrders: { moduleId: string; order: number }[]) => {
   const bulkOps = moduleOrders.map(({ moduleId, order }) => ({
     updateOne: {
-      filter: { _id: moduleId, courseId },
+      filter: { _id: moduleId as any, courseId: courseId as any },
       update: { $set: { order } },
     },
   }));
-  await CourseModule.bulkWrite(bulkOps);
+  await CourseModule.bulkWrite(bulkOps as any);
   const modules = await CourseModule.find({ courseId, isDeleted: false }).sort({ order: 1 });
   return modules;
 };

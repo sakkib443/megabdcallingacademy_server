@@ -57,7 +57,7 @@ const deleteLesson = async (req: Request, res: Response) => {
 
 const addMaterial = async (req: Request, res: Response) => {
   try {
-    const file = req.file as any;
+    const file = (req as any).file;
     const material = {
       title: req.body.title || file?.originalname || 'Untitled',
       fileUrl: file?.path || req.body.fileUrl,
