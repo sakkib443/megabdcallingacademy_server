@@ -93,10 +93,51 @@ export const deleteMentorController = async (req: Request, res: Response) => {
   }
 };
 
+// GET MY PROFILE → Mentor নিজের প্রোফাইল (token-based)
+export const getMyMentorProfile = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?._id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const { Mentor } = await import('./mentor.model');
+    const mentor = await Mentor.findOne({ userId }).populate('userId', 'email role status');
+    if (!mentor) return res.status(404).json({ success: false, message: 'Mentor profile not found' });
+    res.status(200).json({ success: true, data: mentor });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// UPDATE MY PROFILE → Mentor নিজের প্রোফাইল আপডেট
+export const updateMyMentorProfile = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?._id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const { Mentor } = await import('./mentor.model');
+    const mentor = await Mentor.findOne({ userId });
+    if (!mentor) return res.status(404).json({ success: false, message: 'Mentor not found' });
+
+    // Only allow updating specific fields
+    const allowed = ['name', 'phone', 'designation', 'subject', 'specialized_area',
+      'education_qualification', 'work_experience', 'training_experience', 'image', 'details', 'lifeJourney'];
+    const updates: any = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    const updated = await Mentor.findByIdAndUpdate(mentor._id, updates, { new: true })
+      .populate('userId', 'email role status');
+    res.status(200).json({ success: true, message: 'Profile updated', data: updated });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const MentorController = {
   createMentorController,
   getAllMentorsController,
   getSingleMentorController,
   updateMentorController,
   deleteMentorController,
+  getMyMentorProfile,
+  updateMyMentorProfile,
 };
