@@ -1,6 +1,7 @@
 import express from 'express';
 import { ClassScheduleController } from './classSchedule.controller';
 import { authMiddleware, authorize } from '../../middlewares/auth';
+import { uploadFile } from '../../config/cloudinary';
 
 const router = express.Router();
 
@@ -10,6 +11,9 @@ router.get('/student/today', authMiddleware, ClassScheduleController.todayClasse
 
 // ── Mentor routes (BEFORE /:id) ──────────────────────────
 router.get('/mentor/my-classes', authMiddleware, authorize('mentor'), ClassScheduleController.myClasses);
+
+// ── File Upload (Cloudinary) ─────────────────────────────
+router.post('/upload-material', authMiddleware, authorize('mentor', 'admin'), uploadFile.single('file'), ClassScheduleController.uploadMaterial);
 
 // ── Admin / Training Manager routes ──────────────────────
 router.post('/', authMiddleware, authorize('admin', 'trainingManager', 'mentor'), ClassScheduleController.create);

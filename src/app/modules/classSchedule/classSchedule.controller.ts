@@ -4,6 +4,11 @@ import { ClassScheduleService } from './classSchedule.service';
 
 const create = async (req: Request, res: Response) => {
   try {
+    const user = (req as any).user;
+    // Auto-set mentorId from authenticated user
+    if (!req.body.mentorId && user?._id) {
+      req.body.mentorId = user._id;
+    }
     const result = await ClassScheduleService.createClass(req.body);
     res.status(201).json({ success: true, data: result });
   } catch (error: any) {
@@ -149,9 +154,32 @@ const getByBatch = async (req: Request, res: Response) => {
   }
 };
 
+// Upload material file to Cloudinary (returns URL)
+const uploadMaterial = async (req: Request, res: Response) => {
+  try {
+    const file = (req as any).file;
+    if (!file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    // Cloudinary multer storage puts the URL in file.path
+    const fileUrl = file.path || file.secure_url || file.url;
+    const originalName = file.originalname || 'file';
+    const ext = originalName.split('.').pop()?.toLowerCase() || 'pdf';
+    res.status(200).json({
+      success: true,
+      data: {
+        fileUrl,
+        fileName: originalName,
+        fileType: ext,
+        size: file.size,
+      },
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 export const ClassScheduleController = {
   create, getAll, getOne, update, remove,
   myClasses, uploadRecording, addMaterial, removeMaterial,
   studentSchedule, todayClasses, stats,
-  sendToStudents, getByBatch,
+  sendToStudents, getByBatch, uploadMaterial,
 };
