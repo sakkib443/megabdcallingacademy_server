@@ -2,6 +2,18 @@ import { ClassSchedule } from './classSchedule.model';
 
 // ─── Create Class ───────────────────────────────────────────
 const createClass = async (payload: any) => {
+  // Auto-fill courseId from batch if missing
+  if (!payload.courseId && payload.batchId) {
+    const { Batch } = await import('../batch/batch.model');
+    const batch = await Batch.findById(payload.batchId);
+    if (batch?.courseId) {
+      payload.courseId = batch.courseId;
+    }
+  }
+  // Remove empty string courseId (would fail ObjectId cast)
+  if (payload.courseId === '' || payload.courseId === undefined) {
+    delete payload.courseId;
+  }
   return ClassSchedule.create(payload);
 };
 

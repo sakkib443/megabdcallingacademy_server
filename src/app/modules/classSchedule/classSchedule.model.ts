@@ -29,7 +29,7 @@ export interface IClassSchedule {
 const classScheduleSchema = new Schema<IClassSchedule>(
   {
     batchId: { type: Schema.Types.ObjectId, ref: 'Batch', required: true },
-    courseId: { type: Schema.Types.ObjectId, ref: 'Course', required: true },
+    courseId: { type: Schema.Types.ObjectId, ref: 'Course' },
     mentorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     title: { type: String, required: true },
     topic: { type: String, required: true },
