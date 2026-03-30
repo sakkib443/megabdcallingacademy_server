@@ -12,7 +12,7 @@ router.get('/student/today', authMiddleware, ClassScheduleController.todayClasse
 router.get('/mentor/my-classes', authMiddleware, authorize('mentor'), ClassScheduleController.myClasses);
 
 // ── Admin / Training Manager routes ──────────────────────
-router.post('/', authMiddleware, authorize('admin', 'trainingManager'), ClassScheduleController.create);
+router.post('/', authMiddleware, authorize('admin', 'trainingManager', 'mentor'), ClassScheduleController.create);
 router.get('/all', authMiddleware, authorize('admin', 'trainingManager'), ClassScheduleController.getAll);
 router.get('/stats', authMiddleware, authorize('admin', 'trainingManager'), ClassScheduleController.stats);
 
