@@ -181,28 +181,47 @@ const getStats = async () => {
 
 // ─── Send to Students (notify) ──────────────────────────────
 const sendToStudents = async (classId: string) => {
+  // First get the raw class to get batchId as ObjectId
+  const rawCls = await ClassSchedule.findById(classId);
+  if (!rawCls) throw new Error('Class not found');
+
+  const batchObjectId = rawCls.batchId; // This is the raw ObjectId
+
+  // Now update and populate for response
   const cls = await ClassSchedule.findByIdAndUpdate(
     classId,
     { sentToStudents: true, sentAt: new Date() },
     { new: true }
   ).populate('batchId', 'id courseName');
-  if (!cls) throw new Error('Class not found');
 
-  // Create notifications for enrolled students
+  // Create notifications ONLY for students enrolled in THIS specific batch
   try {
     const { Enrollment } = await import('../enrollment/enrollment.model');
     const { Notification } = await import('../notification/notification.model');
-    const enrollments = await Enrollment.find({ batchId: cls.batchId, isDeleted: false, status: 'active' });
+    
+    // Query with raw ObjectId (not populated object)
+    const enrollments = await Enrollment.find({
+      batchId: batchObjectId,
+      isDeleted: false,
+      status: 'active',
+    });
+
+    const batchName = (cls?.batchId as any)?.courseName || 'your course';
+    const batchCode = (cls?.batchId as any)?.id || '';
+
     const notifications = enrollments.map(e => ({
       userId: e.studentId,
-      title: `New Class Material: ${cls.title}`,
-      message: `New material has been uploaded for ${(cls.batchId as any)?.courseName || 'your course'}. Check your batch materials.`,
+      title: `📚 New Class Material: ${rawCls.title}`,
+      message: `New material has been uploaded for ${batchName}${batchCode ? ` (${batchCode})` : ''}. Check your batch materials.`,
       type: 'info',
       isRead: false,
     }));
+
     if (notifications.length > 0) {
       await Notification.insertMany(notifications);
     }
+
+    console.log(`✅ Sent notifications to ${notifications.length} students in batch ${batchCode}`);
   } catch (e) {
     console.error('Notification send failed:', e);
   }
