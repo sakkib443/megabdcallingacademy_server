@@ -129,8 +129,29 @@ const stats = async (req: Request, res: Response) => {
   }
 };
 
+// Send to Students
+const sendToStudents = async (req: Request, res: Response) => {
+  try {
+    const result = await ClassScheduleService.sendToStudents(req.params.id);
+    res.status(200).json({ success: true, message: 'Sent to students', data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Get classes by batch
+const getByBatch = async (req: Request, res: Response) => {
+  try {
+    const result = await ClassScheduleService.getClassesByBatch(req.params.batchId);
+    res.status(200).json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 export const ClassScheduleController = {
   create, getAll, getOne, update, remove,
   myClasses, uploadRecording, addMaterial, removeMaterial,
   studentSchedule, todayClasses, stats,
+  sendToStudents, getByBatch,
 };

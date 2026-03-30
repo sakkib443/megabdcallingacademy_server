@@ -21,6 +21,8 @@ export interface IClassSchedule {
   }[];
   notes?: string;
   status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
+  sentToStudents: boolean;
+  sentAt?: Date;
   isDeleted: boolean;
 }
 
@@ -50,6 +52,8 @@ const classScheduleSchema = new Schema<IClassSchedule>(
       enum: ['scheduled', 'ongoing', 'completed', 'cancelled'],
       default: 'scheduled',
     },
+    sentToStudents: { type: Boolean, default: false },
+    sentAt: { type: Date },
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }

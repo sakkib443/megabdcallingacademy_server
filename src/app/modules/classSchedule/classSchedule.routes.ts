@@ -25,5 +25,9 @@ router.delete('/:id', authMiddleware, authorize('admin', 'trainingManager'), Cla
 router.patch('/:id/recording', authMiddleware, authorize('mentor', 'admin'), ClassScheduleController.uploadRecording);
 router.post('/:id/material', authMiddleware, authorize('mentor', 'admin'), ClassScheduleController.addMaterial);
 router.delete('/:id/material/:index', authMiddleware, authorize('mentor', 'admin'), ClassScheduleController.removeMaterial);
+router.patch('/:id/send-to-students', authMiddleware, authorize('mentor', 'admin'), ClassScheduleController.sendToStudents);
+
+// ── Get classes by batch ─────────────────────────────────
+router.get('/batch/:batchId', authMiddleware, ClassScheduleController.getByBatch);
 
 export const ClassScheduleRoutes = router;

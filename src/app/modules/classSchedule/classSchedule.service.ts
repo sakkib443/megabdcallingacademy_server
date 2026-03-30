@@ -167,6 +167,46 @@ const getStats = async () => {
   return { total, scheduled, completed, cancelled };
 };
 
+// ─── Send to Students (notify) ──────────────────────────────
+const sendToStudents = async (classId: string) => {
+  const cls = await ClassSchedule.findByIdAndUpdate(
+    classId,
+    { sentToStudents: true, sentAt: new Date() },
+    { new: true }
+  ).populate('batchId', 'id courseName');
+  if (!cls) throw new Error('Class not found');
+
+  // Create notifications for enrolled students
+  try {
+    const { Enrollment } = await import('../enrollment/enrollment.model');
+    const { Notification } = await import('../notification/notification.model');
+    const enrollments = await Enrollment.find({ batchId: cls.batchId, isDeleted: false, status: 'active' });
+    const notifications = enrollments.map(e => ({
+      userId: e.studentId,
+      title: `New Class Material: ${cls.title}`,
+      message: `New material has been uploaded for ${(cls.batchId as any)?.courseName || 'your course'}. Check your batch materials.`,
+      type: 'info',
+      isRead: false,
+    }));
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications);
+    }
+  } catch (e) {
+    console.error('Notification send failed:', e);
+  }
+
+  return cls;
+};
+
+// ─── Get Classes by Batch ───────────────────────────────────
+const getClassesByBatch = async (batchId: string) => {
+  return ClassSchedule.find({ batchId, isDeleted: false })
+    .populate('batchId', 'id courseName status classTime classDays')
+    .populate('courseId', 'title image')
+    .populate('mentorId', 'firstName lastName')
+    .sort({ date: 1, startTime: 1 });
+};
+
 export const ClassScheduleService = {
   createClass,
   getAllClasses,
@@ -181,4 +221,6 @@ export const ClassScheduleService = {
   getTodayClasses,
   getUpcomingClasses,
   getStats,
+  sendToStudents,
+  getClassesByBatch,
 };
