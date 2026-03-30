@@ -1,12 +1,8 @@
 /**
- * Mentor ↔ User Migration Script
- * 
- * এই script:
- * 1. User collection থেকে সব role='mentor' delete করবে
- * 2. Mentor collection থেকে সব mentor নিয়ে প্রতিটির জন্য User account create করবে
- * 3. Mentor document-এ userId link করবে
- * 
- * Usage: npx ts-node src/scripts/migrateMentors.ts
+ * Mentor Fix Script
+ * 1. No email → fullname@gmail.com generate
+ * 2. Already exist as student → change role to mentor
+ * 3. Not linked → create user + link
  */
 
 import mongoose from 'mongoose';
@@ -17,79 +13,61 @@ import { Mentor } from '../app/modules/mentor/mentor.model';
 
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
-async function migrateMentors() {
+async function fixMentors() {
   try {
     const dbUrl = process.env.DATABASE_URL;
     if (!dbUrl) throw new Error('DATABASE_URL is not defined');
 
-    console.log('🔌 Connecting to database...');
+    console.log('🔌 Connecting...');
     await mongoose.connect(dbUrl);
-    console.log('✅ Database connected\n');
+    console.log('✅ Connected\n');
 
-    // ─── Step 1: Delete all mentor users ────────────────
-    console.log('🗑️  Step 1: Deleting all existing mentor users...');
-    const deleteResult = await User.deleteMany({ role: 'mentor' });
-    console.log(`   ✅ Deleted ${deleteResult.deletedCount} mentor user(s)\n`);
-
-    // ─── Step 2: Get all mentors ────────────────────────
-    console.log('📋 Step 2: Reading all mentors...');
     const mentors = await Mentor.find();
-    console.log(`   Found ${mentors.length} mentor(s)\n`);
+    console.log(`📋 Found ${mentors.length} mentor(s)\n`);
 
-    if (mentors.length === 0) {
-      console.log('⚠️  No mentors found. Nothing to migrate.');
-      await mongoose.disconnect();
-      process.exit(0);
-    }
-
-    // ─── Step 3: Create User for each Mentor ────────────
-    console.log('🔄 Step 3: Creating User accounts for each mentor...\n');
-    let created = 0;
-    let skipped = 0;
+    let fixed = 0;
 
     for (const mentor of mentors) {
       const mentorName = mentor.name || 'Mentor';
-      const mentorEmail = mentor.email;
-      const mentorPhone = mentor.phone || '';
+      let mentorEmail = mentor.email;
 
-      // Skip if no email
+      // ─── Fix 1: No email → generate fullname@gmail.com
       if (!mentorEmail) {
-        console.log(`   ⚠️  Skipped "${mentorName}" — no email`);
-        skipped++;
-        continue;
+        mentorEmail = mentorName.toLowerCase().replace(/\s+/g, '') + '@gmail.com';
+        await Mentor.findByIdAndUpdate(mentor._id, { email: mentorEmail });
+        console.log(`📧 Generated email for "${mentorName}": ${mentorEmail}`);
       }
 
-      // Check if email already exists in User
+      // ─── Fix 2: Already exists as different role → change to mentor
       const existingUser = await User.findOne({ email: mentorEmail });
       if (existingUser) {
-        console.log(`   ⚠️  Skipped "${mentorName}" — email ${mentorEmail} already exists as ${existingUser.role}`);
-        // Still link if not linked
-        if (!mentor.userId) {
-          await Mentor.findByIdAndUpdate(mentor._id, { userId: existingUser._id });
-          console.log(`       → Linked existing user to mentor`);
+        if (existingUser.role !== 'mentor') {
+          await User.findByIdAndUpdate(existingUser._id, { role: 'mentor' });
+          console.log(`🔄 Changed "${mentorName}" (${mentorEmail}) role from "${existingUser.role}" → "mentor"`);
         }
-        skipped++;
+        // Link if not linked
+        if (!mentor.userId || String(mentor.userId) !== String(existingUser._id)) {
+          await Mentor.findByIdAndUpdate(mentor._id, { userId: existingUser._id });
+          console.log(`🔗 Linked "${mentorName}" → User ${existingUser._id}`);
+        } else {
+          console.log(`✅ "${mentorName}" already linked`);
+        }
+        fixed++;
         continue;
       }
 
-      // Generate user ID
+      // ─── Fix 3: No user exists → create new
       const userCount = await User.countDocuments();
       const userId = `bac-mentor-${String(userCount + 1).padStart(3, '0')}`;
-
-      // Split name
       const nameParts = mentorName.trim().split(' ');
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(' ') || '';
 
-      // Create User
-      const defaultPassword = 'Mentor@123456';
       const newUser = await User.create({
         id: userId,
         email: mentorEmail,
-        firstName,
-        lastName,
-        phoneNumber: mentorPhone,
-        password: defaultPassword,
+        firstName: nameParts[0],
+        lastName: nameParts.slice(1).join(' ') || '',
+        phoneNumber: mentor.phone || '',
+        password: 'Mentor@123456',
         role: 'mentor',
         status: 'active',
         isDeleted: false,
@@ -97,32 +75,31 @@ async function migrateMentors() {
         image: mentor.image || '',
       });
 
-      // Update Mentor with userId
       await Mentor.findByIdAndUpdate(mentor._id, { userId: newUser._id });
-
-      console.log(`   ✅ ${mentorName}`);
-      console.log(`      📧 ${mentorEmail} | 🆔 ${userId} | 🔑 ${defaultPassword}`);
-      created++;
+      console.log(`✅ Created user for "${mentorName}" | ${mentorEmail} | 🆔 ${userId}`);
+      fixed++;
     }
 
-    // ─── Summary ────────────────────────────────────────
-    console.log('\n' + '━'.repeat(55));
-    console.log('📊 Migration Summary:');
-    console.log(`   ✅ Created: ${created} user account(s)`);
-    console.log(`   ⚠️  Skipped: ${skipped}`);
-    console.log(`   🔑 Default Password: Mentor@123456`);
-    console.log('━'.repeat(55));
-    console.log('\n⚠️  গুরুত্বপূর্ণ: সব mentor-কে বলুন first login-এ password change করতে!');
+    console.log('\n' + '━'.repeat(50));
+    console.log(`📊 Fixed: ${fixed}/${mentors.length} mentors`);
+    console.log('━'.repeat(50));
+
+    // Verify
+    console.log('\n📋 Final status:');
+    const allMentors = await Mentor.find().populate('userId', 'email role');
+    for (const m of allMentors) {
+      const u = m.userId as any;
+      console.log(`  ${m.name} | ${m.email} | User: ${u ? `${u.email} (${u.role})` : '❌ NOT LINKED'}`);
+    }
 
     await mongoose.disconnect();
-    console.log('\n👋 Done! Database disconnected.');
+    console.log('\n👋 Done!');
     process.exit(0);
-
-  } catch (error) {
-    console.error('❌ Migration Error:', error);
+  } catch (e) {
+    console.error('❌ Error:', e);
     await mongoose.disconnect();
     process.exit(1);
   }
 }
 
-migrateMentors();
+fixMentors();
