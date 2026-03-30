@@ -305,6 +305,37 @@ const getMentorStudents = async (userId: string) => {
 };
 
 
+// ─── Admin: Transfer student to another course ────────────
+const transferCourse = async (enrollmentId: string, newCourseId: string, newBatchId?: string) => {
+  const enrollment = await Enrollment.findById(enrollmentId);
+  if (!enrollment) throw new Error('Enrollment not found');
+
+  const oldCourseId = enrollment.courseId;
+  
+  // Check if student already enrolled in new course
+  const existing = await Enrollment.findOne({
+    studentId: enrollment.studentId,
+    courseId: newCourseId,
+    isDeleted: false,
+    status: { $in: ['active', 'pending'] },
+  });
+  if (existing) throw new Error('Student is already enrolled in the target course');
+
+  // Update enrollment to new course
+  enrollment.courseId = newCourseId as any;
+  enrollment.batchId = newBatchId ? (newBatchId as any) : undefined;
+  enrollment.completionPercent = 0;
+  enrollment.studentStatus = 'active';
+  await enrollment.save();
+
+  // Update old course count
+  await Course.findByIdAndUpdate(oldCourseId, { $inc: { totalStudentsEnroll: -1 } });
+  // Update new course count
+  await Course.findByIdAndUpdate(newCourseId, { $inc: { totalStudentsEnroll: 1 } });
+
+  return enrollment;
+};
+
 export const EnrollmentService = {
   createEnrollment,
   verifyPayment,
@@ -318,4 +349,5 @@ export const EnrollmentService = {
   approveEnrollment,
   getStudentPayments,
   getMentorStudents,
+  transferCourse,
 };

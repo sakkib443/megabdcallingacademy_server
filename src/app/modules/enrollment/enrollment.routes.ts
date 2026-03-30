@@ -82,6 +82,14 @@ router.get(
   EnrollmentController.getStats
 );
 
+// ── Admin: Transfer student to another course ───────────────
+router.patch(
+  '/:id/transfer',
+  authMiddleware,
+  authorize('admin', 'trainingManager'),
+  EnrollmentController.transferCourse
+);
+
 // ── Generic update (batchId, studentStatus, etc.) ───────────
 router.patch(
   '/:id',

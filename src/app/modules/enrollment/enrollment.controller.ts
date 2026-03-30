@@ -229,12 +229,35 @@ const updateEnrollment = async (req: Request, res: Response) => {
 
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
-        // Handle empty batchId — unset instead of setting empty string
         if (field === 'batchId' && (!req.body[field] || req.body[field] === '')) {
           unsetData[field] = 1;
         } else {
           updateData[field] = req.body[field];
         }
+      }
+    }
+
+    // ── Batch-Course Validation ───────────────────────────
+    // If assigning a batch, verify it belongs to the same course
+    if (updateData.batchId) {
+      const { Enrollment } = require('./enrollment.model');
+      const { Batch } = await import('../batch/batch.model');
+      
+      const enrollment = await Enrollment.findById(id);
+      if (!enrollment) return res.status(404).json({ success: false, message: 'Enrollment not found' });
+      
+      const batch = await Batch.findById(updateData.batchId);
+      if (!batch) return res.status(404).json({ success: false, message: 'Batch not found' });
+      
+      // Compare courseId
+      const enrollCourseId = enrollment.courseId?.toString();
+      const batchCourseId = batch.courseId?.toString();
+      
+      if (batchCourseId && enrollCourseId && batchCourseId !== enrollCourseId) {
+        return res.status(400).json({
+          success: false,
+          message: 'এই batch অন্য course-এর! Student যেই course-এ enrolled, সেই course-এর batch-ই select করুন।',
+        });
       }
     }
 
@@ -281,6 +304,24 @@ const getMentorStudents = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Admin: Transfer student to another course ────────────
+const transferCourse = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { newCourseId, newBatchId } = req.body;
+    if (!newCourseId) return res.status(400).json({ success: false, message: 'newCourseId is required' });
+    
+    const result = await EnrollmentService.transferCourse(id, newCourseId, newBatchId);
+    res.status(200).json({
+      success: true,
+      message: 'Student transferred to new course successfully',
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 export const EnrollmentController = {
   createEnrollment,
   verifyPayment,
@@ -295,4 +336,5 @@ export const EnrollmentController = {
   getMyPayments,
   updateEnrollment,
   getMentorStudents,
+  transferCourse,
 };
