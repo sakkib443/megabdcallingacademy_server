@@ -1,38 +1,45 @@
-import { Schema, model, Types } from 'mongoose';
+import { Schema, model, Document } from 'mongoose';
 
-export interface IAttendance {
-  classId: Types.ObjectId;
-  batchId: Types.ObjectId;
-  studentId: Types.ObjectId;
+export interface IAttendanceRecord {
+  studentId: Schema.Types.ObjectId;
   status: 'present' | 'absent' | 'late' | 'excused';
-  checkInTime?: Date;
-  method: 'manual' | 'qr' | 'auto';
-  markedBy: Types.ObjectId;
-  notes?: string;
+  note?: string;
+}
+
+export interface IAttendance extends Document {
+  batchId: Schema.Types.ObjectId;
+  mentorId: Schema.Types.ObjectId;
+  date: Date;
+  classTitle?: string;
+  records: IAttendanceRecord[];
   isDeleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const attendanceSchema = new Schema<IAttendance>(
   {
-    classId: { type: Schema.Types.ObjectId, ref: 'ClassSchedule', required: true },
     batchId: { type: Schema.Types.ObjectId, ref: 'Batch', required: true },
-    studentId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    status: {
-      type: String,
-      enum: ['present', 'absent', 'late', 'excused'],
-      default: 'absent',
-    },
-    checkInTime: { type: Date },
-    method: { type: String, enum: ['manual', 'qr', 'auto'], default: 'manual' },
-    markedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    notes: { type: String },
+    mentorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    date: { type: Date, required: true },
+    classTitle: { type: String },
+    records: [
+      {
+        studentId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        status: {
+          type: String,
+          enum: ['present', 'absent', 'late', 'excused'],
+          default: 'absent',
+        },
+        note: { type: String },
+      },
+    ],
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
-attendanceSchema.index({ classId: 1, studentId: 1 }, { unique: true });
-attendanceSchema.index({ studentId: 1, batchId: 1 });
-attendanceSchema.index({ batchId: 1, classId: 1 });
+// One attendance per batch per date
+attendanceSchema.index({ batchId: 1, date: 1 }, { unique: true });
 
 export const Attendance = model<IAttendance>('Attendance', attendanceSchema);

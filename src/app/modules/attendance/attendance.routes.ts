@@ -4,18 +4,19 @@ import { authMiddleware, authorize } from '../../middlewares/auth';
 
 const router = express.Router();
 
-// Mentor/Admin: Mark attendance
-router.post('/mark', authMiddleware, authorize('mentor', 'admin', 'trainingManager'), AttendanceController.mark);
-router.post('/bulk-mark', authMiddleware, authorize('mentor', 'admin', 'trainingManager'), AttendanceController.bulkMark);
+// Take/Update attendance
+router.post('/', authMiddleware, authorize('mentor', 'admin'), AttendanceController.takeAttendance);
 
-// Get attendance for a class
-router.get('/class/:classId', authMiddleware, AttendanceController.getClassAttendance);
+// Get attendance by batch + date
+router.get('/', authMiddleware, AttendanceController.getByDate);
 
-// Batch report (admin/TM)
-router.get('/batch/:batchId/report', authMiddleware, authorize('admin', 'trainingManager', 'mentor'), AttendanceController.getBatchReport);
+// Get attendance history for a batch
+router.get('/history/:batchId', authMiddleware, AttendanceController.getHistory);
 
-// Student: My attendance
-router.get('/my', authMiddleware, AttendanceController.getStudentAttendance);
-router.get('/my/summary', authMiddleware, AttendanceController.getStudentSummary);
+// Get attendance stats for a batch
+router.get('/stats/:batchId', authMiddleware, AttendanceController.getStats);
+
+// Delete attendance
+router.delete('/:id', authMiddleware, authorize('mentor', 'admin'), AttendanceController.deleteAttendance);
 
 export const AttendanceRoutes = router;

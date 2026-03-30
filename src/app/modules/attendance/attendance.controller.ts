@@ -2,67 +2,72 @@
 import { Request, Response } from 'express';
 import { AttendanceService } from './attendance.service';
 
-const mark = async (req: Request, res: Response) => {
+const takeAttendance = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    const result = await AttendanceService.markAttendance({ ...req.body, markedBy: user._id });
+    const { batchId, date, classTitle, records } = req.body;
+    if (!batchId || !date || !records?.length) {
+      return res.status(400).json({ success: false, message: 'batchId, date, and records are required' });
+    }
+    const result = await AttendanceService.takeAttendance({
+      batchId,
+      mentorId: user._id,
+      date,
+      classTitle,
+      records,
+    });
+    res.status(200).json({ success: true, message: 'Attendance saved', data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const getByDate = async (req: Request, res: Response) => {
+  try {
+    const { batchId, date } = req.query;
+    if (!batchId || !date) {
+      return res.status(400).json({ success: false, message: 'batchId and date required' });
+    }
+    const result = await AttendanceService.getAttendanceByDate(batchId as string, date as string);
     res.status(200).json({ success: true, data: result });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }
 };
 
-const bulkMark = async (req: Request, res: Response) => {
+const getHistory = async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
-    const { classId, batchId, records } = req.body;
-    const result = await AttendanceService.bulkMark(classId, batchId, user._id, records);
+    const { batchId } = req.params;
+    const result = await AttendanceService.getBatchAttendanceHistory(batchId);
     res.status(200).json({ success: true, data: result });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }
 };
 
-const getClassAttendance = async (req: Request, res: Response) => {
+const getStats = async (req: Request, res: Response) => {
   try {
-    const result = await AttendanceService.getClassAttendance(req.params.classId);
+    const { batchId } = req.params;
+    const result = await AttendanceService.getBatchAttendanceStats(batchId);
     res.status(200).json({ success: true, data: result });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }
 };
 
-const getStudentAttendance = async (req: Request, res: Response) => {
+const deleteAttendance = async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
-    const { batchId } = req.query;
-    const result = await AttendanceService.getStudentAttendance(user._id, batchId as string);
-    res.status(200).json({ success: true, data: result });
-  } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
-
-const getBatchReport = async (req: Request, res: Response) => {
-  try {
-    const result = await AttendanceService.getBatchReport(req.params.batchId);
-    res.status(200).json({ success: true, data: result });
-  } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
-
-const getStudentSummary = async (req: Request, res: Response) => {
-  try {
-    const user = (req as any).user;
-    const result = await AttendanceService.getStudentSummary(user._id);
-    res.status(200).json({ success: true, data: result });
+    await AttendanceService.deleteAttendance(req.params.id);
+    res.status(200).json({ success: true, message: 'Deleted' });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }
 };
 
 export const AttendanceController = {
-  mark, bulkMark, getClassAttendance,
-  getStudentAttendance, getBatchReport, getStudentSummary,
+  takeAttendance,
+  getByDate,
+  getHistory,
+  getStats,
+  deleteAttendance,
 };
