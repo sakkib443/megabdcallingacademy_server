@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 
 export type TPaymentMethod = 'bkash' | 'sslcommerz' | 'manual' | 'free';
 export type TPaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
-export type TEnrollmentStatus = 'pending' | 'active' | 'expired' | 'cancelled' | 'completed';
+export type TEnrollmentStatus = 'pending' | 'active' | 'expired' | 'cancelled' | 'completed' | 'deleted';
 
 export interface IPayment {
   amount: number;

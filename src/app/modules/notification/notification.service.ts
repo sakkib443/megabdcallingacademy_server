@@ -1,4 +1,5 @@
 import { Notification } from './notification.model';
+import { User } from '../user/user.model';
 
 // ═══ CORE CRUD ══════════════════════════════════════════════
 
@@ -52,6 +53,16 @@ const clearAll = async (userId: string) => {
     { userId, isDeleted: false },
     { isDeleted: true }
   );
+};
+
+// ═══ HELPER: Get all admin user IDs ════════════════════════
+const getAdminUserIds = async (): Promise<string[]> => {
+  const admins = await User.find({
+    role: { $in: ['superAdmin', 'admin', 'trainingManager'] },
+    isDeleted: false,
+  }).select('_id');
+  console.log(`🔍 Found ${admins.length} admin(s) for notification`);
+  return admins.map(a => a._id.toString());
 };
 
 // ═══ TRIGGER HELPERS ════════════════════════════════════════
@@ -121,6 +132,50 @@ const triggerSystemAnnouncement = async (userIds: string[], title: string, messa
   return createBulk(userIds, 'system', `📢 ${title}`, message);
 };
 
+// ═══ ADMIN TRIGGERS ═══════════════════════════════════════════
+// Notify all admins when important events happen
+
+const triggerNewOrderForAdmins = async (
+  studentName: string,
+  courseName: string,
+  amount: number,
+  paymentMethod: string,
+) => {
+  try {
+    const adminIds = await getAdminUserIds();
+    if (adminIds.length === 0) return;
+    await createBulk(
+      adminIds,
+      'enrollment',
+      '🛒 নতুন অর্ডার এসেছে!',
+      `${studentName} "${courseName}" কোর্সে ৳${amount.toLocaleString()} (${paymentMethod}) দিয়ে অর্ডার করেছে।`,
+      '/dashboard/admin/orders'
+    );
+  } catch (e) {
+    console.error('Admin order notification failed:', e);
+  }
+};
+
+const triggerNewRegistrationForAdmins = async (
+  studentName: string,
+  email: string,
+  authProvider: string,
+) => {
+  try {
+    const adminIds = await getAdminUserIds();
+    if (adminIds.length === 0) return;
+    await createBulk(
+      adminIds,
+      'system',
+      '👤 নতুন রেজিস্ট্রেশন!',
+      `${studentName} (${email}) ${authProvider === 'google' ? 'Google দিয়ে' : 'ইমেইল দিয়ে'} রেজিস্টার করেছে।`,
+      '/dashboard/admin/user'
+    );
+  } catch (e) {
+    console.error('Admin registration notification failed:', e);
+  }
+};
+
 export const NotificationService = {
   create, createBulk,
   getUserNotifications, getUnreadCount,
@@ -132,4 +187,7 @@ export const NotificationService = {
   triggerAssignmentDue, triggerAssignmentGraded,
   triggerCertificateReady, triggerInstallmentDue,
   triggerSystemAnnouncement,
+  // Admin triggers
+  triggerNewOrderForAdmins,
+  triggerNewRegistrationForAdmins,
 };

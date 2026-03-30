@@ -7,6 +7,8 @@ import { Certificate } from '../certificate/certificate.model';
 import { ClassSchedule } from '../classSchedule/classSchedule.model';
 import { Exam, ExamSubmission } from '../exam/exam.model';
 import { Batch } from '../batch/batch.model';
+import { Attendance } from '../attendance/attendance.model';
+import { Installment } from '../installment/installment.model';
 
 // ─── Helper: Parse date range from query ────────────────────
 const getDateRange = (req: Request) => {
@@ -385,8 +387,12 @@ const getBatchOverview = async (req: Request, res: Response) => {
       const start = new Date(batch.startDate);
       const end = new Date(batch.endDate);
 
-      // Count enrollments for this batch
-      const enrollCount = await Enrollment.countDocuments({ batchId: batch._id });
+      // Count enrollments for this batch (exclude deleted)
+      const enrollCount = await Enrollment.countDocuments({
+        batchId: batch._id,
+        isDeleted: false,
+        status: { $ne: 'deleted' },
+      });
 
       const batchData = {
         ...batch,
@@ -420,8 +426,202 @@ const getBatchOverview = async (req: Request, res: Response) => {
   } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
 };
 
+// ─── Batch Details (lazy-loaded per batch dropdown) ─────────
+const getBatchDetails = async (req: Request, res: Response) => {
+  try {
+    const { batchId } = req.params;
+
+    // 1. Get batch info
+    const batch = await Batch.findById(batchId)
+      .populate('courseId', 'title image type fee')
+      .populate('mentorId', 'name image designation')
+      .lean();
+
+    if (!batch) {
+      return res.status(404).json({ success: false, message: 'Batch not found' });
+    }
+
+    // 2. Get enrolled students for this batch
+    const enrollments = await Enrollment.find({
+      batchId: batchId,
+      isDeleted: false,
+      status: { $ne: 'deleted' },
+    })
+      .populate('studentId', 'firstName lastName name email phoneNumber image')
+      .populate('courseId', 'title fee')
+      .lean();
+
+    // 3. Get class schedules for this batch
+    const classes = await ClassSchedule.find({
+      batchId: batchId,
+      isDeleted: false,
+    })
+      .sort({ date: 1 })
+      .lean();
+
+    const totalClasses = classes.length;
+    const completedClasses = classes.filter(c => c.status === 'completed').length;
+    const upcomingClasses = classes.filter(c => c.status === 'scheduled').length;
+    const cancelledClasses = classes.filter(c => c.status === 'cancelled').length;
+
+    // 4. Get attendance records for this batch
+    const attendanceRecords = await Attendance.find({
+      batchId: batchId,
+      isDeleted: false,
+    }).lean();
+
+    // Calculate overall attendance
+    let totalPresent = 0;
+    let totalRecords = 0;
+    const perStudentAttendance: Record<string, { present: number; total: number; late: number }> = {};
+
+    attendanceRecords.forEach(att => {
+      att.records.forEach((r: any) => {
+        const sid = r.studentId?.toString();
+        if (!sid) return;
+        if (!perStudentAttendance[sid]) {
+          perStudentAttendance[sid] = { present: 0, total: 0, late: 0 };
+        }
+        perStudentAttendance[sid].total += 1;
+        totalRecords += 1;
+        if (r.status === 'present' || r.status === 'late') {
+          perStudentAttendance[sid].present += 1;
+          totalPresent += 1;
+        }
+        if (r.status === 'late') {
+          perStudentAttendance[sid].late += 1;
+        }
+      });
+    });
+
+    const overallAttendancePct = totalRecords > 0 ? Math.round((totalPresent / totalRecords) * 100) : 0;
+
+    // 5. Build student list with attendance %
+    const students = enrollments.map(e => {
+      const student = e.studentId as any;
+      const sid = student?._id?.toString();
+      const att = sid ? perStudentAttendance[sid] : undefined;
+      const attendancePct = att && att.total > 0 ? Math.round((att.present / att.total) * 100) : 0;
+
+      return {
+        _id: sid,
+        name: student ? `${student.firstName || student.name || ''} ${student.lastName || ''}`.trim() : 'Unknown',
+        email: student?.email || '',
+        phone: student?.phoneNumber || '',
+        image: student?.image || '',
+        enrollmentStatus: e.status,
+        studentStatus: e.studentStatus || 'active',
+        completionPercent: e.completionPercent || 0,
+        paymentAmount: e.payment?.amount || 0,
+        paymentStatus: e.payment?.status || 'pending',
+        paymentMethod: e.payment?.method || '',
+        enrolledAt: e.enrolledAt || e.createdAt,
+        attendancePct,
+        attendancePresent: att?.present || 0,
+        attendanceTotal: att?.total || 0,
+        attendanceLate: att?.late || 0,
+      };
+    });
+
+    // 6. Payment summary
+    const totalPaid = enrollments
+      .filter(e => e.payment?.status === 'paid')
+      .reduce((sum, e) => sum + (e.payment?.amount || 0), 0);
+
+    const totalPending = enrollments
+      .filter(e => e.payment?.status === 'pending')
+      .reduce((sum, e) => sum + (e.payment?.amount || 0), 0);
+
+    const totalPaymentAmount = enrollments.reduce((sum, e) => sum + (e.payment?.amount || 0), 0);
+
+    // Get installments for all enrollments in this batch
+    const enrollmentIds = enrollments.map(e => e._id);
+    const installments = await Installment.find({
+      enrollmentId: { $in: enrollmentIds },
+      isDeleted: false,
+    }).lean();
+
+    const installmentsPaid = installments.filter(i => i.status === 'paid').length;
+    const installmentsDue = installments.filter(i => i.status === 'due' || i.status === 'overdue').length;
+    const installmentsUpcoming = installments.filter(i => i.status === 'upcoming').length;
+    const installmentPaidAmount = installments
+      .filter(i => i.status === 'paid')
+      .reduce((sum, i) => sum + (i.amount || 0), 0);
+    const installmentDueAmount = installments
+      .filter(i => i.status === 'due' || i.status === 'overdue')
+      .reduce((sum, i) => sum + (i.amount || 0), 0);
+
+    // 7. Certificates (for completed batches)
+    const batchIdStr = (batch as any).id || batchId;
+    const certificates = await Certificate.find({
+      batchId: batchIdStr,
+      isDeleted: false,
+    }).lean();
+
+    const activeCerts = certificates.filter(c => c.status === 'active').length;
+    const pendingCerts = certificates.filter(c => c.status === 'pending').length;
+
+    res.json({
+      success: true,
+      data: {
+        batch: {
+          _id: batch._id,
+          id: (batch as any).id,
+          name: (batch as any).name,
+          courseName: (batch as any).courseName,
+          courseId: batch.courseId,
+          mentorId: batch.mentorId,
+          startDate: batch.startDate,
+          endDate: batch.endDate,
+          classTime: (batch as any).classTime,
+          classDays: (batch as any).classDays,
+          maxStudents: (batch as any).maxStudents,
+          status: (batch as any).status,
+        },
+        classes: {
+          total: totalClasses,
+          completed: completedClasses,
+          upcoming: upcomingClasses,
+          cancelled: cancelledClasses,
+          progressPct: totalClasses > 0 ? Math.round((completedClasses / totalClasses) * 100) : 0,
+        },
+        attendance: {
+          overallPct: overallAttendancePct,
+          totalSessions: attendanceRecords.length,
+          totalPresent,
+          totalRecords,
+        },
+        students,
+        payment: {
+          totalCollected: totalPaid,
+          totalPending,
+          totalAmount: totalPaymentAmount,
+          paidCount: enrollments.filter(e => e.payment?.status === 'paid').length,
+          pendingCount: enrollments.filter(e => e.payment?.status === 'pending').length,
+          installments: {
+            total: installments.length,
+            paid: installmentsPaid,
+            due: installmentsDue,
+            upcoming: installmentsUpcoming,
+            paidAmount: installmentPaidAmount,
+            dueAmount: installmentDueAmount,
+          },
+        },
+        certificates: {
+          total: certificates.length,
+          active: activeCerts,
+          pending: pendingCerts,
+        },
+      },
+    });
+  } catch (e: any) {
+    console.error('getBatchDetails error:', e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
 export const AnalyticsController = {
   getDashboardStats, getMonthlyDashboard, getEnrollmentTrends, getRevenueByMonth,
   getPopularCourses, getRevenueSummary, getStudentGrowth, getDailySales, getTypeDistribution,
-  getBatchOverview,
+  getBatchOverview, getBatchDetails,
 };

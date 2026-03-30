@@ -1,5 +1,7 @@
 import { Enrollment } from './enrollment.model';
 import { Course } from '../courses/course.model';
+import { User } from '../user/user.model';
+import { NotificationService } from '../notification/notification.service';
 
 // ─── Create Enrollment (after payment) ──────────────────────
 const createEnrollment = async (payload: {
@@ -23,6 +25,30 @@ const createEnrollment = async (payload: {
     throw new Error('Already enrolled in this course');
   }
 
+  // ── Helper: Send admin notification ──────────────────────
+  const notifyAdmins = async () => {
+    try {
+      const [student, course] = await Promise.all([
+        User.findById(payload.studentId).select('firstName lastName name').lean(),
+        Course.findById(payload.courseId).select('title').lean(),
+      ]);
+      const studentName = student
+        ? `${(student as any).firstName || (student as any).name || 'Student'} ${(student as any).lastName || ''}`.trim()
+        : 'Unknown Student';
+      const courseName = (course as any)?.title || 'Unknown Course';
+      console.log(`📢 Sending admin notification: ${studentName} ordered ${courseName}`);
+      await NotificationService.triggerNewOrderForAdmins(
+        studentName,
+        courseName,
+        payload.payment.amount,
+        payload.payment.method,
+      );
+      console.log('✅ Admin notification sent successfully');
+    } catch (notifErr) {
+      console.error('❌ Admin notification (new order) failed:', notifErr);
+    }
+  };
+
   // If there's an existing cancelled/expired enrollment, update it
   if (existing) {
     existing.status = 'pending';
@@ -32,6 +58,8 @@ const createEnrollment = async (payload: {
       paidAt: payload.payment.method === 'free' ? new Date() : undefined,
     } as any;
     await existing.save();
+    // Notify admins about re-enrollment too
+    await notifyAdmins();
     return existing;
   }
 
@@ -55,6 +83,9 @@ const createEnrollment = async (payload: {
       $inc: { totalStudentsEnroll: 1 },
     });
   }
+
+  // ── Notify admins about new order ───────
+  await notifyAdmins();
 
   return enrollment;
 };
@@ -144,9 +175,13 @@ const getAllEnrollments = async (query: {
   status?: string;
   page?: number;
   limit?: number;
+  includeDeleted?: boolean;
 }) => {
-  const { status, page = 1, limit = 20 } = query;
-  const filter: any = { isDeleted: false };
+  const { status, page = 1, limit = 20, includeDeleted = false } = query;
+  const filter: any = {};
+  if (!includeDeleted) {
+    filter.isDeleted = false;
+  }
   if (status) filter.status = status;
 
   const total = await Enrollment.countDocuments(filter);
@@ -336,6 +371,52 @@ const transferCourse = async (enrollmentId: string, newCourseId: string, newBatc
   return enrollment;
 };
 
+// ─── Soft-delete Enrollment (from Enrollments page) ────────
+// Sets enrollment status to 'deleted' so Orders page shows "Deleted" status
+const softDeleteEnrollment = async (enrollmentId: string) => {
+  const enrollment = await Enrollment.findById(enrollmentId);
+  if (!enrollment) throw new Error('Enrollment not found');
+
+  // Decrease course enrolled count if it was active
+  if (enrollment.status === 'active') {
+    await Course.findByIdAndUpdate(enrollment.courseId, {
+      $inc: { totalStudentsEnroll: -1 },
+    });
+  }
+
+  enrollment.status = 'deleted' as any;
+  enrollment.isDeleted = true;
+  await enrollment.save();
+
+  return enrollment;
+};
+
+// ─── Hard-delete Order (from Orders page) ──────────────────
+// Completely removes the enrollment document from the database
+const hardDeleteOrder = async (enrollmentId: string) => {
+  const enrollment = await Enrollment.findById(enrollmentId);
+  if (!enrollment) throw new Error('Order not found');
+
+  // Decrease course enrolled count if it was active
+  if (enrollment.status === 'active') {
+    await Course.findByIdAndUpdate(enrollment.courseId, {
+      $inc: { totalStudentsEnroll: -1 },
+    });
+  }
+
+  // Also delete related installments if any
+  try {
+    const { Installment } = await import('../installment/installment.model');
+    await Installment.deleteMany({ enrollmentId: enrollment._id });
+  } catch (e) {
+    console.error('Installment cleanup failed:', e);
+  }
+
+  await Enrollment.findByIdAndDelete(enrollmentId);
+
+  return { message: 'Order deleted permanently' };
+};
+
 export const EnrollmentService = {
   createEnrollment,
   verifyPayment,
@@ -350,4 +431,6 @@ export const EnrollmentService = {
   getStudentPayments,
   getMentorStudents,
   transferCourse,
+  softDeleteEnrollment,
+  hardDeleteOrder,
 };

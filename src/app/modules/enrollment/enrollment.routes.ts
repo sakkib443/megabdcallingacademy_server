@@ -106,4 +106,22 @@ router.get(
   EnrollmentController.getMentorStudents
 );
 
+// ── Admin: Soft-delete enrollment ───────────────────────────
+// (order will show status 'deleted')
+router.delete(
+  '/enrollment/:id',
+  authMiddleware,
+  authorize('admin'),
+  EnrollmentController.deleteEnrollment
+);
+
+// ── Admin: Hard-delete order ────────────────────────────────
+// (permanently removes from DB)
+router.delete(
+  '/order/:id',
+  authMiddleware,
+  authorize('admin'),
+  EnrollmentController.hardDeleteOrder
+);
+
 export const EnrollmentRoutes = router;

@@ -28,7 +28,7 @@ const enrollmentSchema = new Schema<IEnrollment>(
     batchId: { type: Schema.Types.ObjectId, ref: 'Batch' },
     status: {
       type: String,
-      enum: ['pending', 'active', 'expired', 'cancelled', 'completed'],
+      enum: ['pending', 'active', 'expired', 'cancelled', 'completed', 'deleted'],
       default: 'pending',
     },
     enrolledAt: { type: Date, default: Date.now },

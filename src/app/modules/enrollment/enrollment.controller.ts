@@ -88,11 +88,12 @@ const checkAccess = async (req: Request, res: Response) => {
 // ─── Admin: Get all enrollments ─────────────────────────────
 const getAllEnrollments = async (req: Request, res: Response) => {
   try {
-    const { status, page, limit } = req.query;
+    const { status, page, limit, includeDeleted } = req.query;
     const result = await EnrollmentService.getAllEnrollments({
       status: status as string,
       page: Number(page) || 1,
       limit: Number(limit) || 20,
+      includeDeleted: includeDeleted === 'true',
     });
 
     res.status(200).json({
@@ -322,6 +323,44 @@ const transferCourse = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Admin: Soft-delete enrollment ────────────────────────
+const deleteEnrollment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await EnrollmentService.softDeleteEnrollment(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Enrollment deleted successfully. Order status set to Deleted.',
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to delete enrollment',
+    });
+  }
+};
+
+// ─── Admin: Hard-delete order ──────────────────────────────
+const hardDeleteOrder = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await EnrollmentService.hardDeleteOrder(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Order deleted permanently',
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to delete order',
+    });
+  }
+};
+
 export const EnrollmentController = {
   createEnrollment,
   verifyPayment,
@@ -337,4 +376,6 @@ export const EnrollmentController = {
   updateEnrollment,
   getMentorStudents,
   transferCourse,
+  deleteEnrollment,
+  hardDeleteOrder,
 };

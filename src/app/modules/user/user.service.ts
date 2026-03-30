@@ -1,6 +1,7 @@
 import { User } from './user.model';
 import { IUser } from './user.interface';
 import jwt from 'jsonwebtoken';
+import { NotificationService } from '../notification/notification.service';
 
 /**
  * Generate a user id in format: bac-(YYYY)-NN
@@ -56,6 +57,20 @@ const createUserServices = async (payload: IUser): Promise<CreateUserResponse> =
     { expiresIn: '7d' }
   );
 
+  // ── Notify admins about new registration ──
+  try {
+    const studentName = `${newUser.firstName} ${newUser.lastName || ''}`.trim();
+    console.log(`📢 Sending admin notification: New registration - ${studentName}`);
+    await NotificationService.triggerNewRegistrationForAdmins(
+      studentName,
+      newUser.email,
+      'local',
+    );
+    console.log('✅ Admin registration notification sent');
+  } catch (e) {
+    console.error('❌ Admin notification (new registration) failed:', e);
+  }
+
   return { user: newUser, token };
 };
 
@@ -69,6 +84,7 @@ const googleLoginServices = async (payload: {
 }): Promise<CreateUserResponse> => {
   // Check if user already exists
   let user = await User.findOne({ email: payload.email, isDeleted: false });
+  let isNewUser = false;
 
   if (user) {
     // Update google info if needed
@@ -80,6 +96,7 @@ const googleLoginServices = async (payload: {
     }
   } else {
     // Create new user
+    isNewUser = true;
     const id = await generateUserId();
     user = await User.create({
       id,
@@ -101,6 +118,22 @@ const googleLoginServices = async (payload: {
     process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'default_secret',
     { expiresIn: '7d' }
   );
+
+  // ── Notify admins about new Google registration (only for new users) ──
+  if (isNewUser) {
+    try {
+      const studentName = `${payload.firstName} ${payload.lastName || ''}`.trim();
+      console.log(`📢 Sending admin notification: New Google registration - ${studentName}`);
+      await NotificationService.triggerNewRegistrationForAdmins(
+        studentName,
+        payload.email,
+        'google',
+      );
+      console.log('✅ Admin Google registration notification sent');
+    } catch (e) {
+      console.error('❌ Admin notification (google registration) failed:', e);
+    }
+  }
 
   return { user, token };
 };
