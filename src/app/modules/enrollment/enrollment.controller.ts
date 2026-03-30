@@ -265,6 +265,22 @@ const updateEnrollment = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Mentor: Get my students ───────────────────────────────
+const getMentorStudents = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?._id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const result = await EnrollmentService.getMentorStudents(userId);
+    res.status(200).json({
+      success: true,
+      data: result.students,
+      batches: result.batches,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const EnrollmentController = {
   createEnrollment,
   verifyPayment,
@@ -278,4 +294,5 @@ export const EnrollmentController = {
   approveEnrollment,
   getMyPayments,
   updateEnrollment,
+  getMentorStudents,
 };

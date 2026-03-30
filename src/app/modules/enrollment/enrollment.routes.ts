@@ -90,4 +90,12 @@ router.patch(
   EnrollmentController.updateEnrollment
 );
 
+// ── Mentor: Get my students ─────────────────────────────────
+router.get(
+  '/mentor-students',
+  authMiddleware,
+  authorize('mentor', 'admin', 'superAdmin'),
+  EnrollmentController.getMentorStudents
+);
+
 export const EnrollmentRoutes = router;

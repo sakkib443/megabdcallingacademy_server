@@ -273,6 +273,38 @@ const getStudentPayments = async (studentId: string) => {
 };
 
 
+// ─── Mentor: Get students in mentor's batches ──────────────
+const getMentorStudents = async (userId: string) => {
+  // Find mentor by userId
+  const { Mentor } = await import('../mentor/mentor.model');
+  const { Batch } = await import('../batch/batch.model');
+  const mentor = await Mentor.findOne({ userId });
+  if (!mentor) return { students: [], batches: [] };
+
+  // Find all batches assigned to this mentor
+  const mentorBatches = await Batch.find({ mentorId: mentor._id, isDeleted: false })
+    .populate('courseId', 'title image type')
+    .lean();
+
+  if (mentorBatches.length === 0) return { students: [], batches: mentorBatches };
+
+  const batchIds = mentorBatches.map(b => b._id);
+
+  // Find all enrollments in those batches
+  const students = await Enrollment.find({
+    batchId: { $in: batchIds },
+    isDeleted: false,
+  })
+    .populate('studentId', 'firstName lastName name email phoneNumber')
+    .populate('courseId', 'title image slug fee')
+    .populate('batchId', 'id name courseName classTime classDays')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return { students, batches: mentorBatches };
+};
+
+
 export const EnrollmentService = {
   createEnrollment,
   verifyPayment,
@@ -285,4 +317,5 @@ export const EnrollmentService = {
   getStats,
   approveEnrollment,
   getStudentPayments,
+  getMentorStudents,
 };
