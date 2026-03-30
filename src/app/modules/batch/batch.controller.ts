@@ -89,11 +89,23 @@ export const deleteBatchController = async (req: Request, res: Response) => {
     }
 };
 
+export const getBatchesByMentorController = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user?._id;
+        if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+        const batches = await BatchService.getBatchesByMentor(userId);
+        res.status(200).json({ success: true, data: batches });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 export const BatchController = {
     createBatchController,
     getAllBatchesController,
     getBatchByIdController,
     getBatchesByCourseController,
+    getBatchesByMentorController,
     updateBatchController,
     deleteBatchController,
 };

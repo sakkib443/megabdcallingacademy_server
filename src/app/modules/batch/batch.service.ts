@@ -1,5 +1,6 @@
 import { Batch } from './batch.model';
 import { IBatch } from './batch.interface';
+import { Mentor } from '../mentor/mentor.model';
 
 /**
  * Generate a batch ID based on course name
@@ -62,6 +63,7 @@ const createBatch = async (payload: Partial<IBatch>): Promise<IBatch> => {
 const getAllBatches = async (): Promise<IBatch[]> => {
     const batches = await Batch.find({ isDeleted: false })
         .populate('courseId', 'title image type')
+        .populate('mentorId', 'name image designation')
         .sort({ createdAt: -1 });
     return batches;
 };
@@ -69,7 +71,8 @@ const getAllBatches = async (): Promise<IBatch[]> => {
 // Get single batch by ID
 const getBatchById = async (id: string): Promise<IBatch | null> => {
     const batch = await Batch.findOne({ id, isDeleted: false })
-        .populate('courseId', 'title image type');
+        .populate('courseId', 'title image type')
+        .populate('mentorId', 'name image designation');
     return batch;
 };
 
@@ -101,11 +104,24 @@ const deleteBatch = async (id: string): Promise<IBatch | null> => {
     return batch;
 };
 
+// Get batches by mentor (via userId)
+const getBatchesByMentor = async (userId: string): Promise<IBatch[]> => {
+    // Find mentor by userId
+    const mentor = await Mentor.findOne({ userId });
+    if (!mentor) return [];
+    const batches = await Batch.find({ mentorId: mentor._id, isDeleted: false })
+        .populate('courseId', 'title image type fee')
+        .populate('mentorId', 'name image designation')
+        .sort({ startDate: -1 });
+    return batches;
+};
+
 export const BatchService = {
     createBatch,
     getAllBatches,
     getBatchById,
     getBatchesByCourse,
+    getBatchesByMentor,
     updateBatch,
     deleteBatch,
 };

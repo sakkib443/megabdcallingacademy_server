@@ -81,7 +81,7 @@ const loginUser = async (payload: { email: string; password: string }) => {
     throw new Error('User not found or not active');
   }
 
-  const isPasswordMatched = await bcrypt.compare(password, user.password);
+  const isPasswordMatched = await bcrypt.compare(password, user.password || '');
 
   if (!isPasswordMatched) {
     throw new Error('Incorrect password');
@@ -129,7 +129,22 @@ const refreshAccessToken = async (refreshToken: string) => {
   }
 };
 
+// Change password
+const changePassword = async (userId: string, currentPassword: string, newPassword: string) => {
+  const user = await User.findById(userId);
+  if (!user || user.isDeleted) {
+    throw new Error('User not found');
+  }
+  const isMatch = await bcrypt.compare(currentPassword, user.password || '');
+  if (!isMatch) {
+    throw new Error('Current password is incorrect');
+  }
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await User.findByIdAndUpdate(userId, { password: hashedPassword });
+};
+
 export const AuthService = {
   loginUser,
   refreshAccessToken,
+  changePassword,
 };

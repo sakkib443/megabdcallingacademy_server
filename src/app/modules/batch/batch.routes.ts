@@ -10,6 +10,9 @@ router.post('/', authMiddleware, authorize('admin', 'superAdmin', 'trainingManag
 // Get all batches (no auth needed for reading)
 router.get('/', BatchController.getAllBatchesController);
 
+// Get my batches (mentor only — uses token to find mentor)
+router.get('/my-batches', authMiddleware, BatchController.getBatchesByMentorController);
+
 // Get batches by course
 router.get('/course/:courseId', BatchController.getBatchesByCourseController);
 
