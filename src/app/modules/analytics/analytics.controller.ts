@@ -372,6 +372,7 @@ const getBatchOverview = async (req: Request, res: Response) => {
     // Get all non-deleted batches
     const allBatches = await Batch.find({ isDeleted: { $ne: true } })
       .populate('courseId', 'title image type fee')
+      .populate('mentorId', 'name image designation')
       .sort({ startDate: 1 })
       .lean();
 
