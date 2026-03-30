@@ -5,6 +5,7 @@ export type TTrainingExperience = {
 
 export type TMentor = {
   id: string;
+  userId?: any;
   name: string;
   email: string;
   phone: string;
