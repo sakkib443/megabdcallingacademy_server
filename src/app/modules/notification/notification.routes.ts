@@ -12,7 +12,7 @@ router.delete('/clear-all', authMiddleware, NotificationController.clearAll);
 router.patch('/:id/read', authMiddleware, NotificationController.markAsRead);
 router.delete('/:id', authMiddleware, NotificationController.remove);
 
-// Admin: Send notification
-router.post('/send', authMiddleware, authorize('admin', 'trainingManager'), NotificationController.adminSend);
+// Admin/Mentor: Send notification
+router.post('/send', authMiddleware, authorize('admin', 'trainingManager', 'mentor'), NotificationController.adminSend);
 
 export const NotificationRoutes = router;
