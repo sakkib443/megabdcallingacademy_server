@@ -84,6 +84,10 @@ const getMonthlyDashboard = async (req: Request, res: Response) => {
       // Previous month
       prevStudents, prevEnrollments, prevPendingOrders,
       prevPaidEnrollments, prevBatches, prevCourses,
+      // TOTAL COUNTS (all-time)
+      totalCourses, totalBatches, runningBatches, totalStudents, totalEnrollments,
+      // Revenue from installments
+      currentInstallments, prevInstallments,
     ] = await Promise.all([
       // Current
       User.countDocuments({ role: 'student', ...currentFilter }),
@@ -99,10 +103,35 @@ const getMonthlyDashboard = async (req: Request, res: Response) => {
       Enrollment.find({ paymentStatus: 'paid', ...prevFilter }).populate('courseId', 'fee'),
       Batch.countDocuments(prevFilter),
       Course.countDocuments({ isDeleted: false, ...prevFilter }),
+      // ALL-TIME totals
+      Course.countDocuments({ isDeleted: false }),
+      Batch.countDocuments({ isDeleted: { $ne: true } }),
+      Batch.countDocuments({ status: { $in: ['active', 'running'] }, isDeleted: { $ne: true } }),
+      User.countDocuments({ role: 'student' }),
+      Enrollment.countDocuments({ status: 'active' }),
+      // Installment-based revenue for current & prev month
+      Installment.find({
+        status: 'paid',
+        isDeleted: false,
+        paidAt: { $gte: currentStart, $lte: currentEnd },
+      }).lean(),
+      Installment.find({
+        status: 'paid',
+        isDeleted: false,
+        paidAt: { $gte: prevStart, $lte: prevEnd },
+      }).lean(),
     ]);
 
-    const currentRevenue = currentPaidEnrollments.reduce((sum, e) => sum + ((e.courseId as any)?.fee || 0), 0);
-    const prevRevenue = prevPaidEnrollments.reduce((sum, e) => sum + ((e.courseId as any)?.fee || 0), 0);
+    // Revenue from installments (actual payments received)
+    const currentInstallmentRevenue = currentInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+    const prevInstallmentRevenue = prevInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+
+    // Fallback to enrollment-based revenue if no installments
+    const currentEnrollmentRevenue = currentPaidEnrollments.reduce((sum, e) => sum + ((e.courseId as any)?.fee || 0), 0);
+    const prevEnrollmentRevenue = prevPaidEnrollments.reduce((sum, e) => sum + ((e.courseId as any)?.fee || 0), 0);
+
+    const currentRevenue = currentInstallmentRevenue > 0 ? currentInstallmentRevenue : currentEnrollmentRevenue;
+    const prevRevenue = prevInstallmentRevenue > 0 ? prevInstallmentRevenue : prevEnrollmentRevenue;
 
     const calcChange = (current: number, prev: number) => {
       if (prev === 0) return current > 0 ? 100 : 0;
@@ -121,6 +150,14 @@ const getMonthlyDashboard = async (req: Request, res: Response) => {
           paidOrders: currentPaidEnrollments.length,
           newBatches,
           newCourses,
+        },
+        // ALL-TIME totals
+        totals: {
+          totalCourses,
+          totalBatches,
+          runningBatches,
+          totalStudents,
+          totalEnrollments,
         },
         changes: {
           students: calcChange(newStudents, prevStudents),
