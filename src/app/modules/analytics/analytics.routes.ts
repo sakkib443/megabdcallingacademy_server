@@ -15,6 +15,8 @@ router.get('/revenue-summary', authMiddleware, authorize('admin'), AnalyticsCont
 router.get('/student-growth', authMiddleware, authorize('admin', 'trainingManager'), AnalyticsController.getStudentGrowth);
 router.get('/batch-overview', authMiddleware, authorize('admin', 'trainingManager'), AnalyticsController.getBatchOverview);
 router.get('/batch-details/:batchId', authMiddleware, authorize('admin', 'trainingManager'), AnalyticsController.getBatchDetails);
+router.patch('/update-student-status', authMiddleware, authorize('admin', 'trainingManager'), AnalyticsController.updateStudentStatus);
+router.post('/add-installment', authMiddleware, authorize('admin', 'trainingManager'), AnalyticsController.addInstallment);
 
 export const AnalyticsRoutes = router;
 

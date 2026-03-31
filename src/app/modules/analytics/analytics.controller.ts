@@ -505,6 +505,7 @@ const getBatchDetails = async (req: Request, res: Response) => {
 
       return {
         _id: sid,
+        enrollmentId: e._id,
         name: student ? `${student.firstName || student.name || ''} ${student.lastName || ''}`.trim() : 'Unknown',
         email: student?.email || '',
         phone: student?.phoneNumber || '',
@@ -520,6 +521,7 @@ const getBatchDetails = async (req: Request, res: Response) => {
         attendancePresent: att?.present || 0,
         attendanceTotal: att?.total || 0,
         attendanceLate: att?.late || 0,
+        attendanceSessions: attendanceRecords.length,
       };
     });
 
@@ -596,6 +598,7 @@ const getBatchDetails = async (req: Request, res: Response) => {
           totalCollected: totalPaid,
           totalPending,
           totalAmount: totalPaymentAmount,
+          coursePrice: (batch.courseId as any)?.fee || 0,
           paidCount: enrollments.filter(e => e.payment?.status === 'paid').length,
           pendingCount: enrollments.filter(e => e.payment?.status === 'pending').length,
           installments: {
@@ -606,6 +609,36 @@ const getBatchDetails = async (req: Request, res: Response) => {
             paidAmount: installmentPaidAmount,
             dueAmount: installmentDueAmount,
           },
+          // Per-student installment breakdown
+          perStudent: students.map(s => {
+            const studentEnrollment = enrollments.find(e => (e.studentId as any)?._id?.toString() === s._id);
+            const studentInstallments = installments.filter(i => i.enrollmentId?.toString() === studentEnrollment?._id?.toString());
+            const sPaid = studentInstallments.filter(i => i.status === 'paid');
+            const sDue = studentInstallments.filter(i => i.status === 'due' || i.status === 'overdue');
+            return {
+              studentId: s._id,
+              enrollmentId: studentEnrollment?._id,
+              name: s.name,
+              email: s.email,
+              phone: s.phone,
+              coursePrice: (batch.courseId as any)?.fee || 0,
+              totalPaid: sPaid.reduce((sum: number, i: any) => sum + (i.amount || 0), 0),
+              totalDue: sDue.reduce((sum: number, i: any) => sum + (i.amount || 0), 0),
+              installmentCount: studentInstallments.length,
+              paidCount: sPaid.length,
+              dueCount: sDue.length,
+              installments: studentInstallments.map(i => ({
+                _id: i._id,
+                installmentNumber: i.installmentNumber,
+                amount: i.amount,
+                dueDate: i.dueDate,
+                paidDate: (i as any).paidDate,
+                status: i.status,
+                method: (i as any).method,
+                notes: (i as any).notes,
+              })).sort((a: any, b: any) => a.installmentNumber - b.installmentNumber),
+            };
+          }),
         },
         certificates: {
           total: certificates.length,
@@ -620,8 +653,82 @@ const getBatchDetails = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Update Student Status ──────────────────────────────────
+const updateStudentStatus = async (req: Request, res: Response) => {
+  try {
+    const { enrollmentId, studentStatus } = req.body;
+    if (!enrollmentId || !studentStatus) {
+      return res.status(400).json({ success: false, message: 'enrollmentId and studentStatus required' });
+    }
+    const validStatuses = ['active', 'completed', 'dropout', 'inactive'];
+    if (!validStatuses.includes(studentStatus)) {
+      return res.status(400).json({ success: false, message: `Invalid status. Must be: ${validStatuses.join(', ')}` });
+    }
+    const enrollment = await Enrollment.findByIdAndUpdate(
+      enrollmentId,
+      { studentStatus },
+      { new: true }
+    );
+    if (!enrollment) {
+      return res.status(404).json({ success: false, message: 'Enrollment not found' });
+    }
+    res.json({ success: true, data: enrollment });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+// ─── Add Installment ────────────────────────────────────────
+const addInstallment = async (req: Request, res: Response) => {
+  try {
+    const { enrollmentId, studentId, courseId, amount, dueDate, status, method, notes } = req.body;
+    if (!enrollmentId || !studentId || !courseId || !amount) {
+      return res.status(400).json({ success: false, message: 'enrollmentId, studentId, courseId, amount required' });
+    }
+
+    // Get the latest installment number
+    const lastInstallment = await Installment.findOne({ enrollmentId })
+      .sort({ installmentNumber: -1 })
+      .lean();
+    const nextNumber = (lastInstallment?.installmentNumber || 0) + 1;
+
+    const installment = await Installment.create({
+      enrollmentId,
+      studentId,
+      courseId,
+      installmentNumber: nextNumber,
+      amount,
+      dueDate: dueDate || new Date(),
+      paidDate: status === 'paid' ? new Date() : undefined,
+      status: status || 'paid',
+      method: method || 'manual',
+      notes: notes || `Installment #${nextNumber}`,
+      isDeleted: false,
+    });
+
+    // Update enrollment payment amount
+    if (status === 'paid') {
+      const allPaid = await Installment.find({
+        enrollmentId,
+        status: 'paid',
+        isDeleted: false,
+      });
+      const totalPaid = allPaid.reduce((sum, i) => sum + (i.amount || 0), 0);
+      await Enrollment.findByIdAndUpdate(enrollmentId, {
+        'payment.amount': totalPaid,
+        'payment.status': 'paid',
+        'payment.method': method || 'manual',
+      });
+    }
+
+    res.json({ success: true, data: installment });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
 export const AnalyticsController = {
   getDashboardStats, getMonthlyDashboard, getEnrollmentTrends, getRevenueByMonth,
   getPopularCourses, getRevenueSummary, getStudentGrowth, getDailySales, getTypeDistribution,
-  getBatchOverview, getBatchDetails,
+  getBatchOverview, getBatchDetails, updateStudentStatus, addInstallment,
 };
