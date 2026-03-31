@@ -35,13 +35,23 @@ const videoStorage = new CloudinaryStorage({
 // ─── File Storage (PDFs, PPTs, DOCs, ZIPs) ──────────────────
 const fileStorage = new CloudinaryStorage({
   cloudinary,
-  params: async (_req, file) => ({
-    folder: 'bdcalling-academy/materials',
-    resource_type: 'raw',
-    allowed_formats: ['pdf', 'ppt', 'pptx', 'doc', 'docx', 'zip', 'xlsx'],
-    public_id: `${Date.now()}-${file.originalname}`,
-  }),
+  params: async (_req, file) => {
+    // Sanitize filename: remove special chars, spaces → underscores
+    const safeName = file.originalname
+      .replace(/\.[^/.]+$/, '')  // remove extension
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .substring(0, 60);
+    return {
+      folder: 'bdcalling-academy/materials',
+      resource_type: 'raw',
+      // NOTE: Do NOT use allowed_formats with resource_type: 'raw' — it causes errors
+      public_id: `${Date.now()}-${safeName}`,
+    };
+  },
 });
+
+// Allowed file extensions for material upload
+const ALLOWED_FILE_TYPES = /\.(pdf|ppt|pptx|doc|docx|zip|xlsx|xls|csv|txt)$/i;
 
 // ─── Multer Upload Middlewares ───────────────────────────────
 export const uploadImage = multer({
@@ -57,6 +67,13 @@ export const uploadVideo = multer({
 export const uploadFile = multer({
   storage: fileStorage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_FILE_TYPES.test(file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type not allowed. Allowed: PDF, PPT, DOC, ZIP, XLSX`));
+    }
+  },
 });
 
 export { cloudinary };
