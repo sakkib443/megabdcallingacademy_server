@@ -496,7 +496,28 @@ const getBatchDetails = async (req: Request, res: Response) => {
 
     const overallAttendancePct = totalRecords > 0 ? Math.round((totalPresent / totalRecords) * 100) : 0;
 
-    // 5. Build student list with attendance %
+    // 5. Get exams/assignments for this batch's course
+    const courseObjId = batch.courseId?._id || batch.courseId;
+    const exams = await Exam.find({
+      courseId: courseObjId,
+      isDeleted: { $ne: true },
+    }).lean();
+    const totalExams = exams.length;
+    const examIds = exams.map(e => e._id);
+
+    // Get all submissions for these exams
+    const allSubmissions = examIds.length > 0
+      ? await ExamSubmission.find({ examId: { $in: examIds } }).lean()
+      : [];
+
+    // Per-student submission count
+    const perStudentSubmissions: Record<string, number> = {};
+    allSubmissions.forEach((sub: any) => {
+      const sid = sub.studentId?.toString();
+      if (sid) perStudentSubmissions[sid] = (perStudentSubmissions[sid] || 0) + 1;
+    });
+
+    // 6. Build student list with attendance % + assignments
     const students = enrollments.map(e => {
       const student = e.studentId as any;
       const sid = student?._id?.toString();
@@ -522,6 +543,8 @@ const getBatchDetails = async (req: Request, res: Response) => {
         attendanceTotal: att?.total || 0,
         attendanceLate: att?.late || 0,
         attendanceSessions: attendanceRecords.length,
+        assignmentsSubmitted: sid ? (perStudentSubmissions[sid] || 0) : 0,
+        assignmentsTotal: totalExams,
       };
     });
 
