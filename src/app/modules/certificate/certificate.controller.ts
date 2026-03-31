@@ -89,8 +89,43 @@ const update = async (req: Request, res: Response) => {
     } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
 };
 
+const getCertBatches = async (req: Request, res: Response) => {
+    try {
+        const result = await CertificateService.getBatchesForCertification();
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
+const getBatchStudents = async (req: Request, res: Response) => {
+    try {
+        const result = await CertificateService.getStudentsInBatch(req.params.batchId);
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
+const toggleEligibility = async (req: Request, res: Response) => {
+    try {
+        const user = (req as any).user;
+        const { studentId, batchId, eligible } = req.body;
+        const result = await CertificateService.toggleCertificateEligibility(
+            studentId, batchId, eligible, user._id
+        );
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
+const bulkGrant = async (req: Request, res: Response) => {
+    try {
+        const user = (req as any).user;
+        const { studentIds, batchId } = req.body;
+        const result = await CertificateService.bulkGrantCertificates(studentIds, batchId, user._id);
+        res.status(200).json({ success: true, data: result });
+    } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
+};
+
 export const CertificateController = {
     create, getAll, getPending, activate, revoke,
     search, verify, getById, myCertificates, stats,
     remove, update,
+    getCertBatches, getBatchStudents, toggleEligibility, bulkGrant,
 };
