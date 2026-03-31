@@ -100,12 +100,37 @@ const removeMaterial = async (req: Request, res: Response) => {
 };
 
 // Student: My schedule (by enrolled batches)
+// Security: Validate that user is actually enrolled in the requested batches
 const studentSchedule = async (req: Request, res: Response) => {
   try {
+    const user = (req as any).user;
     const { batchIds, dateFrom, dateTo } = req.query;
-    const ids = typeof batchIds === 'string' ? batchIds.split(',') : [];
+    const requestedIds = typeof batchIds === 'string' ? batchIds.split(',').filter(Boolean) : [];
+
+    if (requestedIds.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    // Verify the student is enrolled in these batches
+    const { Enrollment } = await import('../enrollment/enrollment.model');
+    const enrollments = await Enrollment.find({
+      studentId: user._id,
+      batchId: { $in: requestedIds },
+      isDeleted: false,
+      status: 'active',
+    }).lean();
+
+    // Only allow batch IDs the student is actually enrolled in
+    const allowedBatchIds: string[] = enrollments
+      .map(e => e.batchId?.toString())
+      .filter((id): id is string => !!id);
+
+    if (allowedBatchIds.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
     const result = await ClassScheduleService.getStudentClasses(
-      ids, dateFrom as string, dateTo as string
+      allowedBatchIds, dateFrom as string, dateTo as string
     );
     res.status(200).json({ success: true, data: result });
   } catch (error: any) {

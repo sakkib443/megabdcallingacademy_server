@@ -87,8 +87,15 @@ const getMentorClasses = async (mentorId: string, dateFrom?: string, dateTo?: st
 };
 
 // ─── Get Student's Classes (by batch) ───────────────────────
+// IMPORTANT: Only return classes that have been explicitly sent/published to students.
+// This ensures batch isolation — students only see materials for THEIR batch
+// and only AFTER the mentor clicks "Send to Students".
 const getStudentClasses = async (batchIds: string[], dateFrom?: string, dateTo?: string) => {
-  const filter: any = { batchId: { $in: batchIds }, isDeleted: false };
+  const filter: any = {
+    batchId: { $in: batchIds },
+    isDeleted: false,
+    sentToStudents: true,  // ← Only show classes that mentor has published
+  };
   if (dateFrom || dateTo) {
     filter.date = {};
     if (dateFrom) filter.date.$gte = new Date(dateFrom);
@@ -96,7 +103,7 @@ const getStudentClasses = async (batchIds: string[], dateFrom?: string, dateTo?:
   }
 
   return ClassSchedule.find(filter)
-    .populate('batchId', 'id courseName')
+    .populate('batchId', 'id courseName courseId')
     .populate('courseId', 'title image')
     .populate('mentorId', 'firstName lastName')
     .sort({ date: 1, startTime: 1 });
