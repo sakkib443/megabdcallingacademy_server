@@ -29,6 +29,7 @@ import { ExamRoutes } from './app/modules/exam/exam.routes';
 import { AssignmentRoutes } from './app/modules/assignment/assignment.routes';
 import { AnalyticsRoutes } from './app/modules/analytics/analytics.routes';
 import { NotificationRoutes } from './app/modules/notification/notification.routes';
+import { ChatbotRoutes } from './app/modules/chatbot/chatbot.routes';
 import globalErrorHandler from './app/middlewares/globalErrorHandler';
 
 const app: Application = express();
@@ -107,6 +108,7 @@ app.use('/api/exams', ExamRoutes);
 app.use('/api/assignments', AssignmentRoutes);
 app.use('/api/analytics', AnalyticsRoutes);
 app.use('/api/notifications', NotificationRoutes);
+app.use('/api/chatbot', ChatbotRoutes);
 
 // Health check
 app.get('/', (req: Request, res: Response) => {
