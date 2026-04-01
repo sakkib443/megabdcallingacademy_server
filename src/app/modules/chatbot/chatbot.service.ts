@@ -44,19 +44,16 @@ async function gatherLiveContext(): Promise<string> {
   try {
     // Fetch ALL courses (many old courses don't have status field set)
     const courses = await Course.find({ status: { $ne: 'archived' } })
-      .select('title slug fee offerPrice durationMonth type totalStudentsEnroll rating technology courseStart lectures totalExam totalProject details courseOverview curriculum softwareYoullLearn jobPositions')
+      .select('title slug fee offerPrice durationMonth type totalStudentsEnroll rating technology courseStart')
       .populate('category', 'name')
-      .populate('mentor', 'name designation')
-      .limit(50)
+      .populate('mentor', 'name')
+      .limit(30)
       .lean();
 
     const courseList = courses.map((c: any) => {
       const cat = c.category?.name || 'General';
-      const mentorName = c.mentor?.name || 'Expert Mentor';
-      const software = (c.softwareYoullLearn || []).join(', ');
-      const jobs = (c.jobPositions || []).join(', ');
-      const curriculum = (c.curriculum || []).slice(0, 10).join(', ');
-      return `- **${c.title}** | Fee: ${c.offerPrice || c.fee} (Original: ${c.fee}) | Duration: ${c.durationMonth} months | Category: ${cat} | Type: ${c.type} | Rating: ${c.rating}/5 | Students: ${c.totalStudentsEnroll}+ | Mentor: ${mentorName} | Technology: ${c.technology} | Lectures: ${c.lectures} | Exams: ${c.totalExam} | Projects: ${c.totalProject} | Software: ${software} | Job Positions: ${jobs} | Curriculum: ${curriculum} | Starts: ${c.courseStart} | Link: /courses/${c.slug}`;
+      const mentor = c.mentor?.name || 'Expert Mentor';
+      return `- ${c.title} | Fee: ${c.offerPrice || c.fee} | Duration: ${c.durationMonth}m | Category: ${cat} | Type: ${c.type} | Rating: ${c.rating}/5 | Mentor: ${mentor} | Tech: ${c.technology} | Starts: ${c.courseStart}`;
     }).join('\n');
 
     // Fetch mentors
