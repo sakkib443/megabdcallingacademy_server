@@ -675,18 +675,37 @@ const getBatchDetails = async (req: Request, res: Response) => {
             const studentInstallments = installments.filter(i => i.enrollmentId?.toString() === studentEnrollment?._id?.toString());
             const sPaid = studentInstallments.filter(i => i.status === 'paid');
             const sDue = studentInstallments.filter(i => i.status === 'due' || i.status === 'overdue');
+            const sUpcoming = studentInstallments.filter(i => i.status === 'upcoming');
+
+            // Admission payment = enrollment.payment.amount (what they paid at enrollment time)
+            const admissionPayment = studentEnrollment?.payment?.amount || 0;
+            // The individual course price (from course fee - same for all in batch)
+            const studentCoursePrice = (batch.courseId as any)?.fee || 0;
+            // Total paid = sum of ALL paid installments
+            const installmentsPaidTotal = sPaid.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+            // Total paid overall = installments paid total (admission is typically the first installment)
+            const totalPaid = installmentsPaidTotal;
+            // Remaining due = coursePrice - totalPaid
+            const remainingDue = Math.max(0, studentCoursePrice - totalPaid);
+
             return {
               studentId: s._id,
               enrollmentId: studentEnrollment?._id,
               name: s.name,
               email: s.email,
               phone: s.phone,
-              coursePrice: (batch.courseId as any)?.fee || 0,
-              totalPaid: sPaid.reduce((sum: number, i: any) => sum + (i.amount || 0), 0),
-              totalDue: sDue.reduce((sum: number, i: any) => sum + (i.amount || 0), 0),
+              image: s.image || '',
+              enrolledAt: studentEnrollment?.enrolledAt || (studentEnrollment as any)?.createdAt,
+              coursePrice: studentCoursePrice,
+              admissionPayment,
+              totalPaid,
+              remainingDue,
+              totalDue: remainingDue,
               installmentCount: studentInstallments.length,
               paidCount: sPaid.length,
               dueCount: sDue.length,
+              upcomingCount: sUpcoming.length,
+              hasInstallmentPlan: studentInstallments.length > 0,
               installments: studentInstallments.map(i => ({
                 _id: i._id,
                 installmentNumber: i.installmentNumber,
@@ -696,6 +715,7 @@ const getBatchDetails = async (req: Request, res: Response) => {
                 status: i.status,
                 method: (i as any).method,
                 notes: (i as any).notes,
+                transactionId: (i as any).transactionId,
               })).sort((a: any, b: any) => a.installmentNumber - b.installmentNumber),
             };
           }),
