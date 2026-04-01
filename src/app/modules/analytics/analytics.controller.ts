@@ -41,12 +41,12 @@ const getDashboardStats = async (req: Request, res: Response) => {
       totalEnrollments, activeEnrollments, pendingPayments,
       totalCertificates, totalClasses,
     ] = await Promise.all([
-      User.countDocuments({ role: 'student', ...dateFilter }),
+      User.countDocuments({ role: 'student', isDeleted: { $ne: true }, ...dateFilter }),
       Course.countDocuments({ isDeleted: false, ...dateFilter }),
-      User.countDocuments({ role: 'mentor', ...dateFilter }),
-      Enrollment.countDocuments(dateFilter),
-      Enrollment.countDocuments({ status: 'active', ...dateFilter }),
-      Enrollment.countDocuments({ paymentStatus: 'pending', ...dateFilter }),
+      User.countDocuments({ role: 'mentor', isDeleted: { $ne: true }, ...dateFilter }),
+      Enrollment.countDocuments({ isDeleted: false, ...dateFilter }),
+      Enrollment.countDocuments({ status: 'active', isDeleted: false, ...dateFilter }),
+      Enrollment.countDocuments({ 'payment.status': 'pending', isDeleted: false, ...dateFilter }),
       Certificate.countDocuments({ status: 'active', isDeleted: false, ...dateFilter }),
       ClassSchedule.countDocuments({ isDeleted: false, ...dateFilter }),
     ]);
@@ -90,48 +90,85 @@ const getMonthlyDashboard = async (req: Request, res: Response) => {
       currentInstallments, prevInstallments,
     ] = await Promise.all([
       // Current
-      User.countDocuments({ role: 'student', ...currentFilter }),
-      Enrollment.countDocuments(currentFilter),
-      Enrollment.countDocuments({ paymentStatus: 'pending', ...currentFilter }),
-      Enrollment.find({ paymentStatus: 'paid', ...currentFilter }).populate('courseId', 'fee'),
-      Batch.countDocuments(currentFilter),
+      User.countDocuments({ role: 'student', isDeleted: { $ne: true }, ...currentFilter }),
+      Enrollment.countDocuments({ isDeleted: false, ...currentFilter }),
+      Enrollment.countDocuments({ 'payment.status': 'pending', isDeleted: false, ...currentFilter }),
+      Enrollment.find({ 'payment.status': 'paid', isDeleted: false, ...currentFilter }).populate('courseId', 'fee'),
+      Batch.countDocuments({ isDeleted: { $ne: true }, ...currentFilter }),
       Course.countDocuments({ isDeleted: false, ...currentFilter }),
       // Previous
-      User.countDocuments({ role: 'student', ...prevFilter }),
-      Enrollment.countDocuments(prevFilter),
-      Enrollment.countDocuments({ paymentStatus: 'pending', ...prevFilter }),
-      Enrollment.find({ paymentStatus: 'paid', ...prevFilter }).populate('courseId', 'fee'),
-      Batch.countDocuments(prevFilter),
+      User.countDocuments({ role: 'student', isDeleted: { $ne: true }, ...prevFilter }),
+      Enrollment.countDocuments({ isDeleted: false, ...prevFilter }),
+      Enrollment.countDocuments({ 'payment.status': 'pending', isDeleted: false, ...prevFilter }),
+      Enrollment.find({ 'payment.status': 'paid', isDeleted: false, ...prevFilter }).populate('courseId', 'fee'),
+      Batch.countDocuments({ isDeleted: { $ne: true }, ...prevFilter }),
       Course.countDocuments({ isDeleted: false, ...prevFilter }),
       // ALL-TIME totals
       Course.countDocuments({ isDeleted: false }),
       Batch.countDocuments({ isDeleted: { $ne: true } }),
       Batch.countDocuments({ status: { $in: ['active', 'running'] }, isDeleted: { $ne: true } }),
-      User.countDocuments({ role: 'student' }),
-      Enrollment.countDocuments({ status: 'active' }),
-      // Installment-based revenue for current & prev month
+      User.countDocuments({ role: 'student', isDeleted: { $ne: true } }),
+      Enrollment.countDocuments({ status: 'active', isDeleted: false }),
+      // Installment-based revenue for current & prev month (use paidDate not paidAt)
       Installment.find({
         status: 'paid',
         isDeleted: false,
-        paidAt: { $gte: currentStart, $lte: currentEnd },
+        paidDate: { $gte: currentStart, $lte: currentEnd },
       }).lean(),
       Installment.find({
         status: 'paid',
         isDeleted: false,
-        paidAt: { $gte: prevStart, $lte: prevEnd },
+        paidDate: { $gte: prevStart, $lte: prevEnd },
       }).lean(),
     ]);
 
     // Revenue from installments (actual payments received)
-    const currentInstallmentRevenue = currentInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
-    const prevInstallmentRevenue = prevInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+    let currentInstallmentRevenue = currentInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+    let prevInstallmentRevenue = prevInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
 
-    // Fallback to enrollment-based revenue if no installments
-    const currentEnrollmentRevenue = currentPaidEnrollments.reduce((sum, e) => sum + ((e.courseId as any)?.fee || 0), 0);
-    const prevEnrollmentRevenue = prevPaidEnrollments.reduce((sum, e) => sum + ((e.courseId as any)?.fee || 0), 0);
+    // If paidDate-based query returned 0, also try createdAt-based (some installments may not have paidDate set)
+    if (currentInstallmentRevenue === 0) {
+      const fallbackCurrent = await Installment.find({
+        status: 'paid', isDeleted: false,
+        createdAt: { $gte: currentStart, $lte: currentEnd },
+      }).lean();
+      currentInstallmentRevenue = fallbackCurrent.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+    }
+    if (prevInstallmentRevenue === 0) {
+      const fallbackPrev = await Installment.find({
+        status: 'paid', isDeleted: false,
+        createdAt: { $gte: prevStart, $lte: prevEnd },
+      }).lean();
+      prevInstallmentRevenue = fallbackPrev.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+    }
+
+    // Fallback: enrollment-based revenue (payment.amount or course fee)
+    const currentEnrollmentRevenue = currentPaidEnrollments.reduce((sum, e) => sum + ((e as any).payment?.amount || (e.courseId as any)?.fee || 0), 0);
+    const prevEnrollmentRevenue = prevPaidEnrollments.reduce((sum, e) => sum + ((e as any).payment?.amount || (e.courseId as any)?.fee || 0), 0);
 
     const currentRevenue = currentInstallmentRevenue > 0 ? currentInstallmentRevenue : currentEnrollmentRevenue;
     const prevRevenue = prevInstallmentRevenue > 0 ? prevInstallmentRevenue : prevEnrollmentRevenue;
+
+    // ── Due Payment Stats ──
+    // All due/overdue installments (total outstanding)
+    const allDueInstallments = await Installment.find({
+      status: { $in: ['due', 'overdue'] },
+      isDeleted: false,
+    }).lean();
+    const totalDueAmount = allDueInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+
+    // Unique students with dues
+    const studentsWithDue = new Set(allDueInstallments.map((i: any) => i.studentId?.toString())).size;
+
+    // Due collected this month (installments that were paid this month)
+    const dueCollectedThisMonth = currentInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+    const dueCollectedPrevMonth = prevInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+
+    // Overdue count
+    const overdueCount = allDueInstallments.filter((i: any) => i.status === 'overdue' || (i.status === 'due' && new Date(i.dueDate) < new Date())).length;
+    const overdueAmount = allDueInstallments
+      .filter((i: any) => i.status === 'overdue' || (i.status === 'due' && new Date(i.dueDate) < new Date()))
+      .reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
 
     const calcChange = (current: number, prev: number) => {
       if (prev === 0) return current > 0 ? 100 : 0;
@@ -158,6 +195,16 @@ const getMonthlyDashboard = async (req: Request, res: Response) => {
           runningBatches,
           totalStudents,
           totalEnrollments,
+        },
+        // Due payment stats
+        dues: {
+          studentsWithDue,
+          totalDueAmount,
+          dueCollectedThisMonth,
+          dueCollectedPrevMonth,
+          overdueCount,
+          overdueAmount,
+          dueCollectionChange: calcChange(dueCollectedThisMonth, dueCollectedPrevMonth),
         },
         changes: {
           students: calcChange(newStudents, prevStudents),
@@ -243,12 +290,25 @@ const getRevenueByMonth = async (req: Request, res: Response) => {
       const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
       const end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59);
 
-      const enrollments = await Enrollment.find({
-        paymentStatus: 'paid',
-        createdAt: { $gte: start, $lte: end },
-      }).populate('courseId', 'fee');
+      // Try installment-based revenue first
+      const paidInstallments = await Installment.find({
+        status: 'paid', isDeleted: false,
+        $or: [
+          { paidDate: { $gte: start, $lte: end } },
+          { paidDate: { $exists: false }, createdAt: { $gte: start, $lte: end } },
+        ],
+      }).lean();
+      let revenue = paidInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
 
-      const revenue = enrollments.reduce((sum, e) => sum + ((e.courseId as any)?.fee || 0), 0);
+      // Fallback to enrollment-based
+      if (revenue === 0) {
+        const enrollments = await Enrollment.find({
+          'payment.status': 'paid', isDeleted: false,
+          createdAt: { $gte: start, $lte: end },
+        }).populate('courseId', 'fee');
+        revenue = enrollments.reduce((sum, e) => sum + ((e as any).payment?.amount || (e.courseId as any)?.fee || 0), 0);
+      }
+
       months.push({
         month: start.toLocaleDateString('en', { month: 'short', year: '2-digit' }),
         revenue,
@@ -281,26 +341,53 @@ const getRevenueSummary = async (req: Request, res: Response) => {
     const dateRange = getDateRange(req);
     const dateFilter = dateRange ? { createdAt: dateRange } : {};
 
-    const allPaid = await Enrollment.find({ paymentStatus: 'paid', ...dateFilter }).populate('courseId', 'fee');
-    const totalRevenue = allPaid.reduce((sum, e) => sum + ((e.courseId as any)?.fee || 0), 0);
+    // Installment-based total revenue
+    const allPaidInstallments = await Installment.find({ status: 'paid', isDeleted: false, ...dateFilter }).lean();
+    const installmentRevenue = allPaidInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
 
-    // This month (within filtered range or overall)
+    // Enrollment-based fallback
+    const allPaidEnrollments = await Enrollment.find({ 'payment.status': 'paid', isDeleted: false, ...dateFilter }).populate('courseId', 'fee');
+    const enrollmentRevenue = allPaidEnrollments.reduce((sum, e) => sum + ((e as any).payment?.amount || (e.courseId as any)?.fee || 0), 0);
+
+    const totalRevenue = installmentRevenue > 0 ? installmentRevenue : enrollmentRevenue;
+
+    // This month
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thisMonthPaid = allPaid.filter(e => new Date(e.createdAt as any) >= monthStart);
-    const thisMonthRevenue = thisMonthPaid.reduce((sum, e) => sum + ((e.courseId as any)?.fee || 0), 0);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-    // Payment method breakdown
+    const thisMonthInstallments = await Installment.find({
+      status: 'paid', isDeleted: false,
+      $or: [
+        { paidDate: { $gte: monthStart, $lte: monthEnd } },
+        { paidDate: { $exists: false }, createdAt: { $gte: monthStart, $lte: monthEnd } },
+      ],
+    }).lean();
+    let thisMonthRevenue = thisMonthInstallments.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+
+    if (thisMonthRevenue === 0) {
+      const thisMonthEnrollments = allPaidEnrollments.filter(e => new Date(e.createdAt as any) >= monthStart);
+      thisMonthRevenue = thisMonthEnrollments.reduce((sum, e) => sum + ((e as any).payment?.amount || (e.courseId as any)?.fee || 0), 0);
+    }
+
+    // Payment method breakdown from installments
     const methods: Record<string, number> = {};
-    allPaid.forEach(e => {
-      const m = (e as any).paymentMethod || 'other';
-      methods[m] = (methods[m] || 0) + ((e.courseId as any)?.fee || 0);
-    });
+    if (allPaidInstallments.length > 0) {
+      allPaidInstallments.forEach((i: any) => {
+        const m = i.method || 'other';
+        methods[m] = (methods[m] || 0) + (i.amount || 0);
+      });
+    } else {
+      allPaidEnrollments.forEach(e => {
+        const m = (e as any).payment?.method || 'other';
+        methods[m] = (methods[m] || 0) + ((e as any).payment?.amount || (e.courseId as any)?.fee || 0);
+      });
+    }
 
     res.json({
       success: true, data: {
         totalRevenue, thisMonthRevenue,
-        totalTransactions: allPaid.length,
+        totalTransactions: allPaidInstallments.length > 0 ? allPaidInstallments.length : allPaidEnrollments.length,
         paymentMethods: Object.entries(methods).map(([method, amount]) => ({ method, amount })),
         isFiltered: !!dateRange,
       },
@@ -652,6 +739,19 @@ const getBatchDetails = async (req: Request, res: Response) => {
           totalSessions: attendanceRecords.length,
           totalPresent,
           totalRecords,
+          // Raw grid data: each session with date, title, and per-student status
+          grid: attendanceRecords
+            .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .map((att: any) => ({
+              _id: att._id,
+              date: att.date,
+              classTitle: att.classTitle || '',
+              records: (att.records || []).map((r: any) => ({
+                studentId: r.studentId?.toString(),
+                status: r.status,
+                note: r.note || '',
+              })),
+            })),
         },
         students,
         payment: {
@@ -677,13 +777,13 @@ const getBatchDetails = async (req: Request, res: Response) => {
             const sDue = studentInstallments.filter(i => i.status === 'due' || i.status === 'overdue');
             const sUpcoming = studentInstallments.filter(i => i.status === 'upcoming');
 
-            // Admission payment = enrollment.payment.amount (what they paid at enrollment time)
+            // Admission payment = enrollment.payment.amount
             const admissionPayment = studentEnrollment?.payment?.amount || 0;
-            // The individual course price (from course fee - same for all in batch)
-            const studentCoursePrice = (batch.courseId as any)?.fee || 0;
+            // Per-student course price: use customFee if set, otherwise course fee
+            const defaultFee = (batch.courseId as any)?.fee || 0;
+            const studentCoursePrice = (studentEnrollment as any)?.customFee || defaultFee;
             // Total paid = sum of ALL paid installments
             const installmentsPaidTotal = sPaid.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
-            // Total paid overall = installments paid total (admission is typically the first installment)
             const totalPaid = installmentsPaidTotal;
             // Remaining due = coursePrice - totalPaid
             const remainingDue = Math.max(0, studentCoursePrice - totalPaid);
@@ -697,6 +797,8 @@ const getBatchDetails = async (req: Request, res: Response) => {
               image: s.image || '',
               enrolledAt: studentEnrollment?.enrolledAt || (studentEnrollment as any)?.createdAt,
               coursePrice: studentCoursePrice,
+              defaultCoursePrice: defaultFee,
+              hasCustomFee: !!(studentEnrollment as any)?.customFee,
               admissionPayment,
               totalPaid,
               remainingDue,
@@ -807,8 +909,39 @@ const addInstallment = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Update Payment Details (customFee + admission) ─────────
+const updatePaymentDetails = async (req: Request, res: Response) => {
+  try {
+    const { enrollmentId, customFee, admissionPayment } = req.body;
+    if (!enrollmentId) {
+      return res.status(400).json({ success: false, message: 'enrollmentId required' });
+    }
+
+    const update: any = {};
+    if (customFee !== undefined && customFee !== null) {
+      update.customFee = Number(customFee);
+    }
+    if (admissionPayment !== undefined && admissionPayment !== null) {
+      update['payment.amount'] = Number(admissionPayment);
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ success: false, message: 'Nothing to update' });
+    }
+
+    const enrollment = await Enrollment.findByIdAndUpdate(enrollmentId, update, { new: true });
+    if (!enrollment) {
+      return res.status(404).json({ success: false, message: 'Enrollment not found' });
+    }
+
+    res.json({ success: true, data: enrollment });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
 export const AnalyticsController = {
   getDashboardStats, getMonthlyDashboard, getEnrollmentTrends, getRevenueByMonth,
   getPopularCourses, getRevenueSummary, getStudentGrowth, getDailySales, getTypeDistribution,
-  getBatchOverview, getBatchDetails, updateStudentStatus, addInstallment,
+  getBatchOverview, getBatchDetails, updateStudentStatus, addInstallment, updatePaymentDetails,
 };

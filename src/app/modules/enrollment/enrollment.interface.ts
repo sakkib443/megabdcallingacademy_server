@@ -21,6 +21,7 @@ export interface IEnrollment {
   enrolledAt: Date;
   expiresAt?: Date;
   payment: IPayment;
+  customFee?: number;
   completionPercent: number;
   studentStatus?: 'active' | 'completed' | 'dropout' | 'inactive';
   completedAt?: Date;

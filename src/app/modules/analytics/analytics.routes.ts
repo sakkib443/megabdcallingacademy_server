@@ -17,6 +17,7 @@ router.get('/batch-overview', authMiddleware, authorize('admin', 'trainingManage
 router.get('/batch-details/:batchId', authMiddleware, authorize('admin', 'trainingManager', 'mentor'), AnalyticsController.getBatchDetails);
 router.patch('/update-student-status', authMiddleware, authorize('admin', 'trainingManager'), AnalyticsController.updateStudentStatus);
 router.post('/add-installment', authMiddleware, authorize('admin', 'trainingManager'), AnalyticsController.addInstallment);
+router.patch('/update-payment-details', authMiddleware, authorize('admin', 'trainingManager'), AnalyticsController.updatePaymentDetails);
 
 export const AnalyticsRoutes = router;
 
