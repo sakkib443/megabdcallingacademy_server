@@ -469,16 +469,16 @@ export const ChatbotService = {
     };
   },
 
-  getWelcomeMessage(lang: 'bn' | 'en' = 'en'): ChatResponse {
+  getWelcomeMessage(lang: 'bn' | 'en' = 'bn'): ChatResponse {
     if (lang === 'bn') {
       return {
-        message: `আসসালামু আলাইকুম! 👋\nআমি বিডি কলিং একাডেমির AI সহকারী।\n\nআমি একজন পূর্ণাঙ্গ AI অ্যাসিস্ট্যান্ট — কোর্স, ভর্তি, ফি থেকে শুরু করে প্রোগ্রামিং হেল্প, ক্যারিয়ার গাইডেন্স, যেকোনো প্রশ্নের উত্তর দিতে পারি! বাংলা বা ইংরেজিতে জিজ্ঞেস করুন 😊`,
-        quickReplies: ['কোর্স দেখুন', 'ভর্তি প্রক্রিয়া', 'ক্যারিয়ার গাইড', 'ফ্রি সেমিনার', 'যোগাযোগ'],
+        message: `আসসালামু আলাইকুম! 👋\n\nবিডি কলিং একাডেমিতে আপনাকে স্বাগতম! আমি আপনার AI সহকারী — আপনার পাশে আছি ২৪/৭ 🤖✨\n\n আমাকে যেকোনো কিছু জিজ্ঞেস করতে পারেন:\n\n📚 কোর্স ও ফি সম্পর্কে\n📋 ভর্তি প্রক্রিয়া ও কিস্তি সুবিধা\n👨‍🏫 মেন্টর ও ক্লাস সম্পর্কে\n💼 ক্যারিয়ার গাইডেন্স ও জব প্লেসমেন্ট\n📅 ফ্রি সেমিনার ও ইভেন্ট\n🎓 সার্টিফিকেট ও ফ্রিল্যান্সিং\n\nবাংলা বা ইংরেজি — যেকোনো ভাষায় কথা বলুন, আমি বুঝবো! 😊`,
+        quickReplies: ['📚 কোর্স দেখুন', '📋 ভর্তি প্রক্রিয়া', '💼 ক্যারিয়ার গাইড', '📅 ফ্রি সেমিনার', '📞 যোগাযোগ'],
       };
     }
     return {
-      message: `Hello! 👋\nI'm BdCalling Academy's AI Assistant.\n\nI'm a full AI assistant — I can help with courses, admission, fees, and also programming help, career guidance, or any question you have! Ask me anything in Bengali or English 😊`,
-      quickReplies: ['View Courses', 'Admission Process', 'Career Guide', 'Free Seminars', 'Contact Us'],
+      message: `Hello! 👋\n\nWelcome to BdCalling Academy! I'm your AI Assistant — here to help you 24/7 🤖✨\n\nFeel free to ask me about:\n\n📚 Courses & Fees\n📋 Admission & Installment Plans\n👨‍🏫 Mentors & Classes\n💼 Career Guidance & Job Placement\n📅 Free Seminars & Events\n🎓 Certificates & Freelancing\n\nAsk me anything in Bengali or English! 😊`,
+      quickReplies: ['📚 View Courses', '📋 Admission Process', '💼 Career Guide', '📅 Free Seminars', '📞 Contact Us'],
     };
   },
 };
